@@ -1,0 +1,12 @@
+Input: {"key":"","val":"","op":"LOGIN","src_key":"","dst_key":"","uid":"1"}
+Output: {"status":"OK","val":null,"uid":"1"}
+Input: {"key":"CS101","val":"system security","op":"CREATE","src_key":"","dst_key":"","uid":"1"}
+Output: {"status":"OK","val":null,"uid":"1"}
+Input: {"key":"CS102","val":"cryptography","op":"CREATE","src_key":"","dst_key":"","uid":"1"}
+Output: {"status":"OK","val":null,"uid":"1"}
+Input: {"key":"CS101","val":null,"op":"COPY","src_key":"","dst_key":"","uid":"1"}
+Output: {"status":"FAIL","val":null,"uid":""}
+Input: {"key":"CS101","val":null,"op":"READ","src_key":"","dst_key":"","uid":"1"}
+Output: {"status":"OK","val":"system security","uid":"1"}
+Input: {"key":"CS103","val":null,"op":"READ","src_key":"","dst_key":"","uid":"1"}
+Output: {"status":"FAIL","val":null,"uid":"1"}

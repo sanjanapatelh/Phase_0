@@ -1,0 +1,38 @@
+Input: {"key":"CaseLogin","val":"arya","op":"LOGIN","src_key":"","dst_key":"","uid":"1"}
+Output: {"status":"OK","val":null,"uid":"1"}
+Input: {"key":"CaseLogin","val":"arya stark","op":"CREATE","src_key":"","dst_key":"","uid":"1"}
+Output: {"status":"OK","val":null,"uid":"1"}
+Input: {"key":"CaseLogin","val":null,"op":"READ","src_key":"","dst_key":"","uid":"1"}
+Output: {"status":"OK","val":"arya stark","uid":"1"}
+Input: {"key":"CaseLogin","val":"arya","op":"LOGOUT","src_key":"","dst_key":"","uid":"1"}
+Output: {"status":"OK","val":null,"uid":"1"}
+Input: {"key":"MultipleUser","val":null,"op":"LOGIN","src_key":"","dst_key":"","uid":"1"}
+Output: {"status":"OK","val":null,"uid":"1"}
+Input: {"key":"MultipleUser","val":null,"op":"LOGIN","src_key":"","dst_key":"","uid":"2"}
+Output: {"status":"FAIL","val":null,"uid":"1"}
+Input: {"key":"MultipleUser","val":"arya stark","op":"CREATE","src_key":"","dst_key":"","uid":"4"}
+Output: {"status":"OK","val":null,"uid":"1"}
+Input: {"key":"MultipleUser","val":null,"op":"READ","src_key":"","dst_key":"","uid":"4"}
+Output: {"status":"OK","val":"arya stark","uid":"1"}
+Input: {"key":"MultipleUser","val":null,"op":"LOGOUT","src_key":"","dst_key":"","uid":"1"}
+Output: {"status":"OK","val":null,"uid":"1"}
+Input: {"key":"MultipleUser","val":null,"op":"LOGIN","src_key":"","dst_key":"","uid":"2"}
+Output: {"status":"OK","val":null,"uid":"2"}
+Input: {"key":"MultipleUser2","val":"sansa stark","op":"CREATE","src_key":"","dst_key":"","uid":"4"}
+Output: {"status":"OK","val":null,"uid":"2"}
+Input: {"key":"MultipleUser","val":null,"op":"READ","src_key":"","dst_key":"","uid":"4"}
+Output: {"status":"OK","val":"arya stark","uid":"2"}
+Input: {"key":"NoActiveSession","val":null,"op":"LOGIN","src_key":"","dst_key":"","uid":"1"}
+Output: {"status":"FAIL","val":null,"uid":"2"}
+Input: {"key":"NoActiveSession","val":null,"op":"LOGOUT","src_key":"","dst_key":"","uid":"2"}
+Output: {"status":"OK","val":null,"uid":"2"}
+Input: {"key":"NoActiveSession","val":"arya stark","op":"CREATE","src_key":"","dst_key":"","uid":"2"}
+Output: {"status":"FAIL","val":null,"uid":""}
+Input: {"key":"NoActiveSession2","val":"arya stark","op":"CREATE","src_key":"","dst_key":"","uid":"2"}
+Output: {"status":"FAIL","val":null,"uid":""}
+Input: {"key":"NoActiveSession","val":"faceless","op":"WRITE","src_key":"","dst_key":"","uid":"2"}
+Output: {"status":"FAIL","val":null,"uid":""}
+Input: {"key":"NoActiveSession","val":null,"op":"DELETE","src_key":"","dst_key":"","uid":"2"}
+Output: {"status":"FAIL","val":null,"uid":""}
+Input: {"key":"NoActiveSession","val":null,"op":"LOGOUT","src_key":"","dst_key":"","uid":"1"}
+Output: {"status":"FAIL","val":null,"uid":""}

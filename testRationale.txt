@@ -1,0 +1,67 @@
+Part A :
+    (All the test cases are authorized and session is active , just tested for the functionality of COPY  )
+    Test Cases are in file Test/a1
+
+Test 1(a1) positive :
+    Case :  
+        1. Login with uid 1
+        2. Create key CS101 ,CS102, CS103 ( authorized )
+        3. Copy value of CS101 to CS103 ( authorized )
+    Output :
+        1. Able to login as the only session running 
+        2. Able to create 3 key as user has his session active.
+        3. Able to copy value as both the keys are created and values can be copied.
+    Explanation:
+        This is a positive case where all required elements are provided and with positive output.
+
+
+Test 2(a2) Negative : 
+    Case :  
+        1. Login with uid 1
+        2. Create key CS101 ,CS102 ( authorized )
+        3. Copy value of CS101 to CS103 ( authorized )
+    Output :
+        1. Able to login as the only session running 
+        2. Able to create 2 key .
+        3. Copy function fails as the dst_key not available.
+    Explanation:
+        Negative case where requested key not created.
+
+Test 3(a3) Negative : 
+    Case :  
+        1. Login with uid 1
+        2. Create key CS101 ,CS102 ( authorized )
+        3. Copy value of CS101 without mentioning dst_key -> any of the key dst_key/key is empty
+    Output :
+        1. Able to login as the only session running 
+        2. Able to create 2 key .
+        3. Copy function fails as the dst_key is empty.
+    Explanation:
+        The request fails when key/dst_key is not passed .
+
+Code changes Explanation: 
+    1. Added COPY operation and json key src_key , dst_key in request structure. 
+    2. When the copy operation is executed i have restricted the requests with empty value for ( source key and destination key ).
+
+
+
+Part B(b1): 
+    Code changes Explanation:
+        1. Request with empty UID fails 
+        2. When the session is already logged in any incoming request with any UID will be processed as the request sent by logged in user. 
+    
+    Case 1(key caseLogin):
+        Positive Case 
+        1. Login with uid 1 , session created and allows to create new records. 
+
+    Case 2(MultipleUser):
+        1. There is an active session which blocks other user from logging in. 
+        2. Once the session is logged out other user can login. 
+
+    Case 3(NoActiveSession):
+        1. User logged in and logged out. 
+        2. Hence there is no active session available which blocked all the operations. 
+        3. User trying to log out without a session fails.
+        
+
+    
