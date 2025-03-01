@@ -24,7 +24,7 @@ var Responses chan NetworkData
 //code changes begin
 
 var current_user string
-var session_alive bool
+var session_active bool
 
 // code changes End
 
@@ -75,7 +75,7 @@ func doOp(request *Request, response *Response) {
 	response.Status = FAIL
 	response.Uid = current_user
 
-	if session_alive {
+	if session_active {
 
 		switch request.Op {
 		case NOOP:
@@ -170,7 +170,7 @@ func doCopy(request *Request, response *Response) {
 // Create session for the user and doesnot allow any other user to login.
 func doLogin(request *Request, response *Response) {
 
-	if !session_alive {
+	if !session_active {
 		messageFromClient := request.Message
 		if messageFromClient == nil {
 			fmt.Println("Message is empty")
@@ -199,7 +199,7 @@ func doLogin(request *Request, response *Response) {
 			return
 		}
 
-		session_alive = true
+		session_active = true
 		current_user = request.Uid
 		response.Status = OK
 		response.Uid = request.Uid
@@ -208,8 +208,8 @@ func doLogin(request *Request, response *Response) {
 
 // When the session is active all the session to logout
 func doLogout(request *Request, response *Response) {
-	if session_alive {
-		session_alive = false
+	if session_active {
+		session_active = false
 		response.Status = OK
 		response.Uid = current_user
 		current_user = ""

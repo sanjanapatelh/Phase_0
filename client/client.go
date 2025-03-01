@@ -41,8 +41,10 @@ func ProcessOp(request *Request) *Response {
 	response := &Response{Status: FAIL}
 	if validateRequest(request) {
 		switch request.Op {
-		case CREATE, DELETE, READ, WRITE, COPY, LOGIN, LOGOUT:
+		case CREATE, DELETE, READ, WRITE, COPY, LOGOUT:
 			doOp(request, response)
+		case LOGIN:
+			doLogin(request, response)
 		default:
 			// struct already default initialized to
 			// FAIL status
@@ -70,26 +72,30 @@ func validateRequest(r *Request) bool {
 	}
 }
 
-func doOp(request *Request, response *Response) {
-	if request.Op == LOGIN {
-		// encrypt shared key using server's public key
-		sharedKey := crypto_utils.NewSessionKey()
-		sharedKeyEncrypted := crypto_utils.EncryptPK(sharedKey, serverPublicKey)
+func doLogin(request *Request, response *Response){
 
-		// mint client's signature
-		timeOfDay := crypto_utils.TodToBytes(crypto_utils.ReadClock())
-		signingMessage := []byte(name + request.Uid + string(rune(request.Op)))
-		signingMessage = append(signingMessage, timeOfDay...)
-		clientSigningKey := crypto_utils.NewPrivateKey()
-		clientSignature := crypto_utils.Sign(signingMessage, clientSigningKey)
+	// encrypt shared key using server's public key
+	sharedKey := crypto_utils.NewSessionKey()
+	sharedKeyEncrypted := crypto_utils.EncryptPK(sharedKey, serverPublicKey)
 
-		// create encrypted contents of the message
+	// mint client's signature
+	timeOfDay := crypto_utils.TodToBytes(crypto_utils.ReadClock())
+	signingMessage := []byte(name + request.Uid + string(rune(request.Op)))
+	signingMessage = append(signingMessage, timeOfDay...)
+	clientSigningKey := crypto_utils.NewPrivateKey()
+	clientSignature := crypto_utils.Sign(signingMessage, clientSigningKey)
+
+	// create encrypted contents of the message
 		encryptedContentsBytes, _ := json.Marshal(server.ClientToServerEncryptedContents{Name: name, Uid: request.Uid, Op: string(rune(request.Op)), ClientVerificationKey: crypto_utils.PublicKeyToBytes(&clientSigningKey.PublicKey), TimeOfDay: timeOfDay, Signature: clientSignature})
 
-		// add client's mesage to server as part of the request
+	// add client's mesage to server as part of the request
 		messageToServerBytes, _ := json.Marshal(server.MessageClientToServer{Name: name, SharedKeyEncrypted: sharedKeyEncrypted, MessageEncrypted: crypto_utils.EncryptSK(encryptedContentsBytes, sharedKey)})
-		request.Message = append(request.Message, messageToServerBytes...)
-	}
+	request.Message = append(request.Message, messageToServerBytes...)
+
+	doOp(request, response)
+}
+
+func doOp(request *Request, response *Response) {
 	requestBytes, _ := json.Marshal(request)
 	json.Unmarshal(sendAndReceive(NetworkData{Payload: requestBytes, Name: name}).Payload, &response)
 }
