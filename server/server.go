@@ -192,12 +192,38 @@ func doLogin(request *Request, response *Response) {
 		clientSignature := clientToServerMessageContents.Signature
 		signingMessage := []byte(clientToServerMessageContents.Name + clientToServerMessageContents.Uid + clientToServerMessageContents.Op)
 		signingMessage = append(signingMessage, clientToServerMessageContents.TimeOfDay...)
+		signingMessage = append(signingMessage, clientToServerMessageContents.ClientVerificationKey...)
 		clientVerificationKey, _ := crypto_utils.BytesToPublicKey(clientToServerMessageContents.ClientVerificationKey)
 
 		// verify client's signature, name and tod
+		fmt.Println(crypto_utils.Verify(clientSignature, crypto_utils.Hash(signingMessage), clientVerificationKey) ,"yoo verifying..")
 		if !crypto_utils.Verify(clientSignature, crypto_utils.Hash(signingMessage), clientVerificationKey) || !strings.EqualFold(messageClientToServer.Name, clientToServerMessageContents.Name) || !crypto_utils.BytesToTod(clientToServerMessageContents.TimeOfDay).Before(crypto_utils.ReadClock()) {
 			return
 		}
+
+		// Create server's response
+		timeOfDay := crypto_utils.TodToBytes(crypto_utils.ReadClock())
+		serverSigningMessage := []byte(name + request.Uid + string(rune(request.Op)))
+		serverSigningMessage = append(serverSigningMessage, timeOfDay...)
+		serverSigningMessage = append(serverSigningMessage, crypto_utils.PublicKeyToBytes(publicKey)...)
+		serverSignature := crypto_utils.Sign(serverSigningMessage, privateKey)
+
+		// create encrypted contents of the message
+		encryptedServerMessage, _ := json.Marshal(ServerToClientEncryptedContents{
+			Name: name, 
+			Uid: request.Uid, 
+			Op: string(rune(request.Op)), 
+			ServerVerificationKey: crypto_utils.PublicKeyToBytes(publicKey), 
+			TimeOfDay: timeOfDay, 
+			Signature: serverSignature,
+		})
+
+		// create server's message to client
+		messageToClientBytes, _ := json.Marshal(MessageServerToClient{
+			Name: name, 
+			MessageEncrypted: crypto_utils.EncryptSK(encryptedServerMessage, sharedKey),
+		})
+		response.Message = messageToClientBytes
 
 		session_active = true
 		current_user = request.Uid
@@ -233,11 +259,25 @@ type MessageClientToServer struct {
 	MessageEncrypted   []byte `json:"message_encrypted"`
 }
 
+type MessageServerToClient struct {
+	Name               string `json:"name"`
+	MessageEncrypted   []byte `json:"message_encrypted"`
+}
+
 type ClientToServerEncryptedContents struct {
 	Name                  string `json:"name"`
 	Uid                   string `json:"uid"`
 	Op                    string `json:"op"`
 	ClientVerificationKey []byte `json:"client_public_key"`
+	TimeOfDay             []byte `json:"time_of_day"`
+	Signature             []byte `json:"signature"`
+}
+
+type ServerToClientEncryptedContents struct {
+	Name                  string `json:"name"`
+	Uid                   string `json:"uid"`
+	Op                    string `json:"op"`
+	ServerVerificationKey []byte `json:"client_public_key"`
 	TimeOfDay             []byte `json:"time_of_day"`
 	Signature             []byte `json:"signature"`
 }

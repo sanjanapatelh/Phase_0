@@ -3,7 +3,9 @@ package client
 import (
 	"crypto/rsa"
 	"encoding/json"
+	"fmt"
 	"server"
+	"strings"
 
 	"os"
 
@@ -83,16 +85,46 @@ func doLogin(request *Request, response *Response){
 	signingMessage := []byte(name + request.Uid + string(rune(request.Op)))
 	signingMessage = append(signingMessage, timeOfDay...)
 	clientSigningKey := crypto_utils.NewPrivateKey()
+	signingMessage = append(signingMessage, crypto_utils.PublicKeyToBytes(&clientSigningKey.PublicKey)...)
 	clientSignature := crypto_utils.Sign(signingMessage, clientSigningKey)
 
 	// create encrypted contents of the message
-		encryptedContentsBytes, _ := json.Marshal(server.ClientToServerEncryptedContents{Name: name, Uid: request.Uid, Op: string(rune(request.Op)), ClientVerificationKey: crypto_utils.PublicKeyToBytes(&clientSigningKey.PublicKey), TimeOfDay: timeOfDay, Signature: clientSignature})
+	encryptedContentsBytes, _ := json.Marshal(server.ClientToServerEncryptedContents{Name: name, Uid: request.Uid, Op: string(rune(request.Op)), ClientVerificationKey: crypto_utils.PublicKeyToBytes(&clientSigningKey.PublicKey), TimeOfDay: timeOfDay, Signature: clientSignature})
 
 	// add client's mesage to server as part of the request
 		messageToServerBytes, _ := json.Marshal(server.MessageClientToServer{Name: name, SharedKeyEncrypted: sharedKeyEncrypted, MessageEncrypted: crypto_utils.EncryptSK(encryptedContentsBytes, sharedKey)})
 	request.Message = append(request.Message, messageToServerBytes...)
 
 	doOp(request, response)
+
+	messageFromServer := response.Message
+
+	if messageFromServer == nil {
+		fmt.Println("Message is empty")
+		return
+	}
+
+	MessageServerToClient := server.MessageServerToClient{}
+	json.Unmarshal(messageFromServer, &MessageServerToClient)
+
+	encryptedContentsBytesServer := MessageServerToClient.MessageEncrypted
+	decryptedMessageBytesServer, _ := crypto_utils.DecryptSK(encryptedContentsBytesServer, sharedKey)
+	serverToClientMessageContents := server.ServerToClientEncryptedContents{}
+	json.Unmarshal(decryptedMessageBytesServer, &serverToClientMessageContents)
+
+	serverSignature := serverToClientMessageContents.Signature
+	serverSigningMessage := []byte(serverToClientMessageContents.Name + serverToClientMessageContents.Uid + serverToClientMessageContents.Op)
+	serverSigningMessage = append(serverSigningMessage, serverToClientMessageContents.TimeOfDay...)
+	serverSigningMessage = append(serverSigningMessage, serverToClientMessageContents.ServerVerificationKey...)
+	serverVerificationKey, _ := crypto_utils.BytesToPublicKey(serverToClientMessageContents.ServerVerificationKey)
+
+	fmt.Println(serverToClientMessageContents.Name, MessageServerToClient.Name , "verify servers dignature")
+
+	if crypto_utils.Verify(serverSignature, crypto_utils.Hash(serverSigningMessage), serverVerificationKey) && 
+	   strings.EqualFold(serverToClientMessageContents.Name, MessageServerToClient.Name) && 
+	   crypto_utils.BytesToTod(serverToClientMessageContents.TimeOfDay).Before(crypto_utils.ReadClock()) {
+		fmt.Println("Login succeeded party by Sanjana!!!!")
+	}
 }
 
 func doOp(request *Request, response *Response) {
