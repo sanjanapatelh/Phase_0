@@ -175,10 +175,8 @@ func doLogin(request *Request, response *Response) {
 		if messageFromClient == nil {
 			return
 		}
-		fmt.Print(len(messageFromClient), "\n")
 		messageClientToServer := MessageClientToServer{}
 		json.Unmarshal(messageFromClient, &messageClientToServer)
-		PrintPrettyJSON(messageClientToServer)
 
 		// decrypt shared key
 		sharedKeyEncrypted := messageClientToServer.SharedKeyEncrypted
@@ -189,17 +187,15 @@ func doLogin(request *Request, response *Response) {
 		decryptedMessageBytes, _ := crypto_utils.DecryptSK(encryptedContentsBytes, sharedKey)
 		clientToServerMessageContents := ClientToServerEncryptedContents{}
 		json.Unmarshal(decryptedMessageBytes, &clientToServerMessageContents)
-		PrintPrettyJSON(clientToServerMessageContents)
 
 		clientSignature := clientToServerMessageContents.Signature
-		signingMessage := []byte(name + request.Uid + string(rune(request.Op)))
-		signingMessage = append(signingMessage, crypto_utils.TodToBytes(crypto_utils.ReadClock())...)
-		clientPublickey, _ := crypto_utils.BytesToPublicKey(clientToServerMessageContents.ClientPublicKey)
+		signingMessage := []byte(clientToServerMessageContents.Name + clientToServerMessageContents.Uid + clientToServerMessageContents.Op)
+		signingMessage = append(signingMessage, clientToServerMessageContents.TimeOfDay...)
+		clientVerificationKey, _ := crypto_utils.BytesToPublicKey(clientToServerMessageContents.ClientVerificationKey)
 
 		// verify client's signature, name and tod
-		if !crypto_utils.Verify(clientSignature, signingMessage, clientPublickey) || !strings.EqualFold(messageClientToServer.Name, clientToServerMessageContents.Name) || !crypto_utils.BytesToTod(clientToServerMessageContents.TimeOfDay).Before(crypto_utils.ReadClock()) {
-			fmt.Println("FAILED")
-			fmt.Println(crypto_utils.Verify(signingMessage, clientSignature, clientPublickey))
+		if !crypto_utils.Verify(clientSignature, crypto_utils.Hash(signingMessage), clientVerificationKey) || !strings.EqualFold(messageClientToServer.Name, clientToServerMessageContents.Name) || !crypto_utils.BytesToTod(clientToServerMessageContents.TimeOfDay).Before(crypto_utils.ReadClock()) {
+			fmt.Println(crypto_utils.Verify(clientSignature, crypto_utils.Hash(signingMessage), clientVerificationKey))
 			return
 		}
 
@@ -238,10 +234,10 @@ type MessageClientToServer struct {
 }
 
 type ClientToServerEncryptedContents struct {
-	Name            string `json:"name"`
-	Uid             string `json:"uid"`
-	Op              string `json:"op"`
-	ClientPublicKey []byte `json:"client_public_key"`
-	TimeOfDay       []byte `json:"time_of_day"`
-	Signature       []byte `json:"signature"`
+	Name                  string `json:"name"`
+	Uid                   string `json:"uid"`
+	Op                    string `json:"op"`
+	ClientVerificationKey []byte `json:"client_public_key"`
+	TimeOfDay             []byte `json:"time_of_day"`
+	Signature             []byte `json:"signature"`
 }
