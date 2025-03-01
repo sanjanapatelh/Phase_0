@@ -3,7 +3,9 @@ package server
 import (
 	"crypto/rsa"
 	"encoding/json"
+	"fmt"
 	"os"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -72,8 +74,6 @@ func doOp(request *Request, response *Response) {
 
 	response.Status = FAIL
 	response.Uid = current_user
-
-	
 
 	if session_alive {
 
@@ -155,8 +155,8 @@ func doWriteVal(request *Request, response *Response) {
 
 // Copy function
 func doCopy(request *Request, response *Response) {
-// Check for src_key abd dst_key being empty 
-// Assign the value of requested src_key value to det_key
+	// Check for src_key abd dst_key being empty
+	// Assign the value of requested src_key value to det_key
 	if _, ok := kvstore[request.Src_key]; ok {
 		if _, ok := kvstore[request.Dst_key]; ok {
 			kvstore[request.Dst_key] = kvstore[request.Src_key]
@@ -166,18 +166,49 @@ func doCopy(request *Request, response *Response) {
 	}
 }
 
-//Login 
+// Login
 // Create session for the user and doesnot allow any other user to login.
 func doLogin(request *Request, response *Response) {
 
 	if !session_alive {
+		messageFromClient := request.Message
+		if messageFromClient == nil {
+			return
+		}
+		fmt.Print(len(messageFromClient), "\n")
+		messageClientToServer := MessageClientToServer{}
+		json.Unmarshal(messageFromClient, &messageClientToServer)
+		PrintPrettyJSON(messageClientToServer)
+
+		// decrypt shared key
+		sharedKeyEncrypted := messageClientToServer.SharedKeyEncrypted
+		sharedKey, _ := crypto_utils.DecryptPK(sharedKeyEncrypted, privateKey)
+
+		// decrypt message contents using shared key
+		encryptedContentsBytes := messageClientToServer.MessageEncrypted
+		decryptedMessageBytes, _ := crypto_utils.DecryptSK(encryptedContentsBytes, sharedKey)
+		clientToServerMessageContents := ClientToServerEncryptedContents{}
+		json.Unmarshal(decryptedMessageBytes, &clientToServerMessageContents)
+		PrintPrettyJSON(clientToServerMessageContents)
+
+		clientSignature := clientToServerMessageContents.Signature
+		signingMessage := []byte(name + request.Uid + string(rune(request.Op)))
+		signingMessage = append(signingMessage, crypto_utils.TodToBytes(crypto_utils.ReadClock())...)
+		clientPublickey, _ := crypto_utils.BytesToPublicKey(clientToServerMessageContents.ClientPublicKey)
+
+		// verify client's signature, name and tod
+		if !crypto_utils.Verify(clientSignature, signingMessage, clientPublickey) || !strings.EqualFold(messageClientToServer.Name, clientToServerMessageContents.Name) || !crypto_utils.BytesToTod(clientToServerMessageContents.TimeOfDay).Before(crypto_utils.ReadClock()) {
+			fmt.Println("FAILED")
+			fmt.Println(crypto_utils.Verify(signingMessage, clientSignature, clientPublickey))
+			return
+		}
+
 		session_alive = true
 		current_user = request.Uid
 		response.Status = OK
 		response.Uid = request.Uid
 	}
 }
-
 
 // When the session is active all the session to logout
 func doLogout(request *Request, response *Response) {
@@ -189,4 +220,28 @@ func doLogout(request *Request, response *Response) {
 	}
 }
 
-// code changes ends
+// PrintPrettyJSON prints the input data in a pretty JSON format. Can be removed after testing.
+func PrintPrettyJSON(input interface{}) {
+	jsonData, err := json.MarshalIndent(input, "", "  ")
+	if err != nil {
+		fmt.Println("Error marshalling JSON:", err)
+		return
+	}
+	fmt.Print(string(jsonData), " ")
+}
+
+// MserverStructure holds the components for secure communication
+type MessageClientToServer struct {
+	Name               string `json:"name"`
+	SharedKeyEncrypted []byte `json:"shared_key_encrypted"`
+	MessageEncrypted   []byte `json:"message_encrypted"`
+}
+
+type ClientToServerEncryptedContents struct {
+	Name            string `json:"name"`
+	Uid             string `json:"uid"`
+	Op              string `json:"op"`
+	ClientPublicKey []byte `json:"client_public_key"`
+	TimeOfDay       []byte `json:"time_of_day"`
+	Signature       []byte `json:"signature"`
+}
