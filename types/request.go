@@ -21,5 +21,5 @@ type Request struct {
 	Dst_key string      `json:"dst_key"`
 	Uid     string      `json:"uid"`
 
-	Message []byte `json:"-"`
+	Message []byte `json:"message,omitempty"`
 }

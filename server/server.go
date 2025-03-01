@@ -173,6 +173,7 @@ func doLogin(request *Request, response *Response) {
 	if !session_alive {
 		messageFromClient := request.Message
 		if messageFromClient == nil {
+			fmt.Println("Message is empty")
 			return
 		}
 		messageClientToServer := MessageClientToServer{}
@@ -195,7 +196,6 @@ func doLogin(request *Request, response *Response) {
 
 		// verify client's signature, name and tod
 		if !crypto_utils.Verify(clientSignature, crypto_utils.Hash(signingMessage), clientVerificationKey) || !strings.EqualFold(messageClientToServer.Name, clientToServerMessageContents.Name) || !crypto_utils.BytesToTod(clientToServerMessageContents.TimeOfDay).Before(crypto_utils.ReadClock()) {
-			fmt.Println(crypto_utils.Verify(clientSignature, crypto_utils.Hash(signingMessage), clientVerificationKey))
 			return
 		}
 
