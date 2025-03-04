@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 
@@ -176,39 +175,102 @@ func doLogin(request *Request, response *Response) {
 		messageFromClient := request.Message
 		if messageFromClient == nil {
 			fmt.Println("Message is empty")
+			response.Status = FAIL
 			return
 		}
-		messageClientToServer := MessageClientToServer{}
-		json.Unmarshal(messageFromClient, &messageClientToServer)
 
-		// decrypt shared key
+		// Parse client message
+		messageClientToServer := MessageClientToServer{}
+
+		if err := json.Unmarshal(messageFromClient, &messageClientToServer); err != nil {
+			fmt.Println("Error: Failed to unmarshal client message:", err)
+			response.Status = FAIL
+			return
+		}
+
+		// Decrypt shared key
 		sharedKeyEncrypted := messageClientToServer.SharedKeyEncrypted
-		sharedKey, _ := crypto_utils.DecryptPK(sharedKeyEncrypted, privateKey)
+		if sharedKeyEncrypted == nil || len(sharedKeyEncrypted) == 0 {
+			fmt.Println("Error: Shared key is empty")
+			response.Status = FAIL
+			return
+		}
+
+		sharedKey, err := crypto_utils.DecryptPK(sharedKeyEncrypted, privateKey)
+		if err != nil {
+			fmt.Println("Error: Failed to decrypt shared key:", err)
+			response.Status = FAIL
+			return
+		}
 
 		// decrypt message contents using shared key
 		encryptedContentsBytes := messageClientToServer.MessageEncrypted
-		decryptedMessageBytes, _ := crypto_utils.DecryptSK(encryptedContentsBytes, sharedKey)
-		clientToServerMessageContents := ClientToServerEncryptedContents{}
-		json.Unmarshal(decryptedMessageBytes, &clientToServerMessageContents)
 
-		clientSignature := clientToServerMessageContents.Signature
+		decryptedMessageBytes, err := crypto_utils.DecryptSK(encryptedContentsBytes, sharedKey)
+		if err != nil {
+			fmt.Println("Error: Failed to decrypt message contents:", err)
+			response.Status = FAIL
+			return
+		}
+
+		clientToServerMessageContents := ClientToServerEncryptedContents{}
+		if err := json.Unmarshal(decryptedMessageBytes, &clientToServerMessageContents); err != nil {
+			fmt.Println("Error: Failed to unmarshal decrypted contents:", err)
+			response.Status = FAIL
+			return
+		}
+
+		// Build signing message for verification
 		signingMessage := []byte(clientToServerMessageContents.Name + clientToServerMessageContents.Uid + clientToServerMessageContents.Op)
 		signingMessage = append(signingMessage, clientToServerMessageContents.TimeOfDay...)
 		signingMessage = append(signingMessage, clientToServerMessageContents.ClientVerificationKey...)
-		clientVerificationKey, _ := crypto_utils.BytesToPublicKey(clientToServerMessageContents.ClientVerificationKey)
 
-		// verify client's signature, name and tod
-		fmt.Println(crypto_utils.Verify(clientSignature, crypto_utils.Hash(signingMessage), clientVerificationKey), "yoo verifying..")
-		if !crypto_utils.Verify(clientSignature, crypto_utils.Hash(signingMessage), clientVerificationKey) || !strings.EqualFold(messageClientToServer.Name, clientToServerMessageContents.Name) || !crypto_utils.BytesToTod(clientToServerMessageContents.TimeOfDay).Before(crypto_utils.ReadClock()) {
+		// Parse client verification key
+		clientVerificationKey, err := crypto_utils.BytesToPublicKey(clientToServerMessageContents.ClientVerificationKey)
+		if err != nil {
+			fmt.Println("Error: Failed to parse client verification key:", err)
+			response.Status = FAIL
+			return
+		}
+
+		currentTime := crypto_utils.ReadClock()
+		clientTime := crypto_utils.BytesToTod(clientToServerMessageContents.TimeOfDay)
+
+		validSignature := crypto_utils.Verify(
+			clientToServerMessageContents.Signature, 
+			crypto_utils.Hash(signingMessage), 
+			clientVerificationKey)
+		
+		validName := strings.EqualFold(messageClientToServer.Name, clientToServerMessageContents.Name)
+		validTime := clientTime.Before(currentTime)
+
+		if !validSignature || !validName || !validTime {
+			fmt.Println("Error: Client verification failed")
+			response.Status = FAIL
 			return
 		}
 
 		// Create server's response
-		timeOfDay := crypto_utils.TodToBytes(crypto_utils.ReadClock())
-		serverSigningMessage := []byte(name + request.Uid + string(rune(request.Op)))
+		timeOfDay := crypto_utils.TodToBytes(currentTime)
+
+		opString := fmt.Sprintf("%d", int(LOGIN))
+		
+		serverSigningMessage := []byte(name + request.Uid + opString)
 		serverSigningMessage = append(serverSigningMessage, timeOfDay...)
 		serverSigningMessage = append(serverSigningMessage, crypto_utils.PublicKeyToBytes(publicKey)...)
+		
+		// Sign server message with proper hashing
 		serverSignature := crypto_utils.Sign(serverSigningMessage, privateKey)
+
+		// Create encrypted contents of the message
+		serverMessageContents := ServerToClientEncryptedContents{
+			Name:                  name,
+			Uid:                   request.Uid,
+			Op:                    opString,
+			ServerVerificationKey: crypto_utils.PublicKeyToBytes(publicKey),
+			TimeOfDay:             timeOfDay,
+			Signature:             serverSignature,
+		}
 
 		// Update Binding Table
 
@@ -216,35 +278,17 @@ func doLogin(request *Request, response *Response) {
 			BindingTable = make(map[string]BindingTableData)
 		}
 
-		if data, exists := BindingTable[request.Uid]; exists {
-			tod := crypto_utils.BytesToTod(clientToServerMessageContents.TimeOfDay)
-			if data.RecentLoginTime.Before(tod) && tod.Before(crypto_utils.ReadClock()) {
-				data.ClientVerificationKey = clientVerificationKey
-				data.RecentLoginTime = crypto_utils.ReadClock()
-				BindingTable[request.Uid] = data
-			}else { return }
-		} else {
-			BindingTable[request.Uid] = BindingTableData{
-				ClientVerificationKey: clientVerificationKey,
-				RecentLoginTime:       crypto_utils.ReadClock(),
-			}
+		serverMessage, err := json.Marshal(serverMessageContents)
+		if err != nil {
+			fmt.Println("Error: Failed to marshal server contents:", err)
+			response.Status = FAIL
+			return
 		}
-		// Binding table complete
-
-		// create encrypted contents of the message
-		encryptedServerMessage, _ := json.Marshal(ServerToClientEncryptedContents{
-			Name:                  name,
-			Uid:                   request.Uid,
-			Op:                    string(rune(request.Op)),
-			ServerVerificationKey: crypto_utils.PublicKeyToBytes(publicKey),
-			TimeOfDay:             timeOfDay,
-			Signature:             serverSignature,
-		})
 
 		// create server's message to client
 		messageToClientBytes, _ := json.Marshal(MessageServerToClient{
 			Name:             name,
-			MessageEncrypted: crypto_utils.EncryptSK(encryptedServerMessage, sharedKey),
+			MessageEncrypted: crypto_utils.EncryptSK(serverMessage, sharedKey),
 		})
 		response.Message = messageToClientBytes
 
@@ -252,7 +296,6 @@ func doLogin(request *Request, response *Response) {
 		current_user = request.Uid
 		response.Status = OK
 		response.Uid = request.Uid
-
 	}
 }
 
@@ -272,49 +315,4 @@ func doLogout(request *Request, response *Response) {
 		//
 
 	}
-}
-
-// PrintPrettyJSON prints the input data in a pretty JSON format. Can be removed after testing.
-func PrintPrettyJSON(input interface{}) {
-	jsonData, err := json.MarshalIndent(input, "", "  ")
-	if err != nil {
-		fmt.Println("Error marshalling JSON:", err)
-		return
-	}
-	fmt.Print(string(jsonData), " ")
-}
-
-// MserverStructure holds the components for secure communication
-type MessageClientToServer struct {
-	Name               string `json:"name"`
-	SharedKeyEncrypted []byte `json:"shared_key_encrypted"`
-	MessageEncrypted   []byte `json:"message_encrypted"`
-}
-
-type MessageServerToClient struct {
-	Name             string `json:"name"`
-	MessageEncrypted []byte `json:"message_encrypted"`
-}
-
-type ClientToServerEncryptedContents struct {
-	Name                  string `json:"name"`
-	Uid                   string `json:"uid"`
-	Op                    string `json:"op"`
-	ClientVerificationKey []byte `json:"client_public_key"`
-	TimeOfDay             []byte `json:"time_of_day"`
-	Signature             []byte `json:"signature"`
-}
-
-type ServerToClientEncryptedContents struct {
-	Name                  string `json:"name"`
-	Uid                   string `json:"uid"`
-	Op                    string `json:"op"`
-	ServerVerificationKey []byte `json:"client_public_key"`
-	TimeOfDay             []byte `json:"time_of_day"`
-	Signature             []byte `json:"signature"`
-}
-
-type BindingTableData struct {
-	ClientVerificationKey *rsa.PublicKey
-	RecentLoginTime       time.Time
 }
