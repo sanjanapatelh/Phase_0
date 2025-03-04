@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -25,6 +26,7 @@ var Responses chan NetworkData
 
 var current_user string
 var session_active bool
+var BindingTable map[string]BindingTableData
 
 // code changes End
 
@@ -196,7 +198,7 @@ func doLogin(request *Request, response *Response) {
 		clientVerificationKey, _ := crypto_utils.BytesToPublicKey(clientToServerMessageContents.ClientVerificationKey)
 
 		// verify client's signature, name and tod
-		fmt.Println(crypto_utils.Verify(clientSignature, crypto_utils.Hash(signingMessage), clientVerificationKey) ,"yoo verifying..")
+		fmt.Println(crypto_utils.Verify(clientSignature, crypto_utils.Hash(signingMessage), clientVerificationKey), "yoo verifying..")
 		if !crypto_utils.Verify(clientSignature, crypto_utils.Hash(signingMessage), clientVerificationKey) || !strings.EqualFold(messageClientToServer.Name, clientToServerMessageContents.Name) || !crypto_utils.BytesToTod(clientToServerMessageContents.TimeOfDay).Before(crypto_utils.ReadClock()) {
 			return
 		}
@@ -208,19 +210,40 @@ func doLogin(request *Request, response *Response) {
 		serverSigningMessage = append(serverSigningMessage, crypto_utils.PublicKeyToBytes(publicKey)...)
 		serverSignature := crypto_utils.Sign(serverSigningMessage, privateKey)
 
+		// Update Binding Table
+
+		if BindingTable == nil {
+			BindingTable = make(map[string]BindingTableData)
+		}
+
+		if data, exists := BindingTable[request.Uid]; exists {
+			tod := crypto_utils.BytesToTod(clientToServerMessageContents.TimeOfDay)
+			if data.RecentLoginTime.Before(tod) && tod.Before(crypto_utils.ReadClock()) {
+				data.ClientVerificationKey = clientVerificationKey
+				data.RecentLoginTime = crypto_utils.ReadClock()
+				BindingTable[request.Uid] = data
+			}else { return }
+		} else {
+			BindingTable[request.Uid] = BindingTableData{
+				ClientVerificationKey: clientVerificationKey,
+				RecentLoginTime:       crypto_utils.ReadClock(),
+			}
+		}
+		// Binding table complete
+
 		// create encrypted contents of the message
 		encryptedServerMessage, _ := json.Marshal(ServerToClientEncryptedContents{
-			Name: name, 
-			Uid: request.Uid, 
-			Op: string(rune(request.Op)), 
-			ServerVerificationKey: crypto_utils.PublicKeyToBytes(publicKey), 
-			TimeOfDay: timeOfDay, 
-			Signature: serverSignature,
+			Name:                  name,
+			Uid:                   request.Uid,
+			Op:                    string(rune(request.Op)),
+			ServerVerificationKey: crypto_utils.PublicKeyToBytes(publicKey),
+			TimeOfDay:             timeOfDay,
+			Signature:             serverSignature,
 		})
 
 		// create server's message to client
 		messageToClientBytes, _ := json.Marshal(MessageServerToClient{
-			Name: name, 
+			Name:             name,
 			MessageEncrypted: crypto_utils.EncryptSK(encryptedServerMessage, sharedKey),
 		})
 		response.Message = messageToClientBytes
@@ -229,6 +252,7 @@ func doLogin(request *Request, response *Response) {
 		current_user = request.Uid
 		response.Status = OK
 		response.Uid = request.Uid
+
 	}
 }
 
@@ -239,6 +263,14 @@ func doLogout(request *Request, response *Response) {
 		response.Status = OK
 		response.Uid = current_user
 		current_user = ""
+
+		// delete  data from binding table
+		if data, exists := BindingTable[request.Uid]; exists {
+			data.ClientVerificationKey = nil // Remove verification key
+			BindingTable[request.Uid] = data         // Update the entry
+		}
+		//
+
 	}
 }
 
@@ -260,8 +292,8 @@ type MessageClientToServer struct {
 }
 
 type MessageServerToClient struct {
-	Name               string `json:"name"`
-	MessageEncrypted   []byte `json:"message_encrypted"`
+	Name             string `json:"name"`
+	MessageEncrypted []byte `json:"message_encrypted"`
 }
 
 type ClientToServerEncryptedContents struct {
@@ -280,4 +312,9 @@ type ServerToClientEncryptedContents struct {
 	ServerVerificationKey []byte `json:"client_public_key"`
 	TimeOfDay             []byte `json:"time_of_day"`
 	Signature             []byte `json:"signature"`
+}
+
+type BindingTableData struct {
+	ClientVerificationKey *rsa.PublicKey
+	RecentLoginTime       time.Time
 }
