@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 
@@ -21,11 +20,6 @@ var name string
 var kvstore map[string]interface{}
 var Requests chan NetworkData
 var Responses chan NetworkData
-
-var (
-	AuthRequests  = make(chan AuthNetworkData, 10)
-	AuthResponses = make(chan AuthNetworkData, 10)
-)
 
 //code changes begin
 
@@ -45,12 +39,10 @@ func init() {
 
 	name = uuid.NewString()
 	kvstore = make(map[string]interface{})
-	BindingTable = make(map[string]BindingTableData)
 	Requests = make(chan NetworkData)
 	Responses = make(chan NetworkData)
 
 	go receiveThenSend()
-	go ReceivedThenSendAuth()
 }
 
 func receiveThenSend() {
@@ -58,15 +50,6 @@ func receiveThenSend() {
 
 	for request := range Requests {
 		Responses <- process(request)
-	}
-}
-
-// ReceivedThenSendAuth handles auth channel communication
-func ReceivedThenSendAuth() {
-	defer close(AuthResponses)
-
-	for authRequest := range AuthRequests {
-		AuthResponses <- doLogin(authRequest)
 	}
 }
 
@@ -108,12 +91,19 @@ func doOp(request *Request, response *Response) {
 			doWriteVal(request, response)
 		case COPY:
 			doCopy(request, response)
+		case LOGIN:
+			doLogin(request, response)
 		case LOGOUT:
 			doLogout(request, response)
 
 		default:
 			// struct already default initialized to
 			// FAIL status
+		}
+
+	} else {
+		if request.Op == 6 {
+			doLogin(request, response)
 		}
 	}
 
@@ -179,189 +169,135 @@ func doCopy(request *Request, response *Response) {
 
 // Login
 // Create session for the user and doesnot allow any other user to login.
-func doLogin(authData AuthNetworkData) AuthNetworkData {
-	messageFromClient := authData.Payload
-	
-	// Check if there's already an active session
-	if session_active {
-		fmt.Println("Error: Session already active for user:", current_user)
-		return AuthNetworkData{
-			Name:    name,
-			Payload: nil,
+func doLogin(request *Request, response *Response) {
+
+	if !session_active {
+		messageFromClient := request.Message
+		if messageFromClient == nil {
+			fmt.Println("Message is empty")
+			response.Status = FAIL
+			return
 		}
-	}
-	
-	if messageFromClient == nil {
-		fmt.Println("Message is empty")
-		return AuthNetworkData{
-			Name:    name,
-			Payload: nil,
+
+		// Parse client message
+		messageClientToServer := MessageClientToServer{}
+
+		if err := json.Unmarshal(messageFromClient, &messageClientToServer); err != nil {
+			fmt.Println("Error: Failed to unmarshal client message:", err)
+			response.Status = FAIL
+			return
 		}
-	}
 
-	// Parse client message
-	messageClientToServer := MessageClientToServer{}
-	if err := json.Unmarshal(messageFromClient, &messageClientToServer); err != nil {
-		fmt.Println("Error: Failed to unmarshal client message:", err)
-		return AuthNetworkData{
-			Name:    name,
-			Payload: nil,
+		// Decrypt shared key
+		sharedKeyEncrypted := messageClientToServer.SharedKeyEncrypted
+		if sharedKeyEncrypted == nil || len(sharedKeyEncrypted) == 0 {
+			fmt.Println("Error: Shared key is empty")
+			response.Status = FAIL
+			return
 		}
-	}
 
-	// Decrypt shared key
-	sharedKeyEncrypted := messageClientToServer.SharedKeyEncrypted
-	if sharedKeyEncrypted == nil || len(sharedKeyEncrypted) == 0 {
-		fmt.Println("Error: Shared key is empty")
-		return AuthNetworkData{
-			Name:    name,
-			Payload: nil,
+		sharedKey, err := crypto_utils.DecryptPK(sharedKeyEncrypted, privateKey)
+		if err != nil {
+			fmt.Println("Error: Failed to decrypt shared key:", err)
+			response.Status = FAIL
+			return
 		}
-	}
 
-	sharedKey, err := crypto_utils.DecryptPK(sharedKeyEncrypted, privateKey)
-	if err != nil {
-		fmt.Println("Error: Failed to decrypt shared key:", err)
-		return AuthNetworkData{
-			Name:    name,
-			Payload: nil,
+		// decrypt message contents using shared key
+		encryptedContentsBytes := messageClientToServer.MessageEncrypted
+
+		decryptedMessageBytes, err := crypto_utils.DecryptSK(encryptedContentsBytes, sharedKey)
+		if err != nil {
+			fmt.Println("Error: Failed to decrypt message contents:", err)
+			response.Status = FAIL
+			return
 		}
-	}
 
-	// Decrypt message contents using shared key
-	encryptedContentsBytes := messageClientToServer.MessageEncrypted
-	decryptedMessageBytes, err := crypto_utils.DecryptSK(encryptedContentsBytes, sharedKey)
-	if err != nil {
-		fmt.Println("Error: Failed to decrypt message contents:", err)
-		return AuthNetworkData{
-			Name:    name,
-			Payload: nil,
+		clientToServerMessageContents := ClientToServerEncryptedContents{}
+		if err := json.Unmarshal(decryptedMessageBytes, &clientToServerMessageContents); err != nil {
+			fmt.Println("Error: Failed to unmarshal decrypted contents:", err)
+			response.Status = FAIL
+			return
 		}
-	}
 
-	clientToServerMessageContents := ClientToServerEncryptedContents{}
-	if err := json.Unmarshal(decryptedMessageBytes, &clientToServerMessageContents); err != nil {
-		fmt.Println("Error: Failed to unmarshal decrypted contents:", err)
-		return AuthNetworkData{
-			Name:    name,
-			Payload: nil,
+		// Build signing message for verification
+		signingMessage := []byte(clientToServerMessageContents.Name + clientToServerMessageContents.Uid + clientToServerMessageContents.Op)
+		signingMessage = append(signingMessage, clientToServerMessageContents.TimeOfDay...)
+		signingMessage = append(signingMessage, clientToServerMessageContents.ClientVerificationKey...)
+
+		// Parse client verification key
+		clientVerificationKey, err := crypto_utils.BytesToPublicKey(clientToServerMessageContents.ClientVerificationKey)
+		if err != nil {
+			fmt.Println("Error: Failed to parse client verification key:", err)
+			response.Status = FAIL
+			return
 		}
-	}
 
-	// Build signing message for verification
-	signingMessage := []byte(clientToServerMessageContents.Name + clientToServerMessageContents.Uid + clientToServerMessageContents.Op)
-	signingMessage = append(signingMessage, clientToServerMessageContents.TimeOfDay...)
-	signingMessage = append(signingMessage, clientToServerMessageContents.ClientVerificationKey...)
+		currentTime := crypto_utils.ReadClock()
+		clientTime := crypto_utils.BytesToTod(clientToServerMessageContents.TimeOfDay)
 
-	// Parse client verification key
-	clientVerificationKey, err := crypto_utils.BytesToPublicKey(clientToServerMessageContents.ClientVerificationKey)
-	if err != nil {
-		fmt.Println("Error: Failed to parse client verification key:", err)
-		return AuthNetworkData{
-			Name:    name,
-			Payload: nil,
+		validSignature := crypto_utils.Verify(
+			clientToServerMessageContents.Signature, 
+			crypto_utils.Hash(signingMessage), 
+			clientVerificationKey)
+		
+		validName := strings.EqualFold(messageClientToServer.Name, clientToServerMessageContents.Name)
+		validTime := clientTime.Before(currentTime)
+
+		if !validSignature || !validName || !validTime {
+			fmt.Println("Error: Client verification failed")
+			response.Status = FAIL
+			return
 		}
-	}
 
-	currentTime := crypto_utils.ReadClock()
-	clientTime := crypto_utils.BytesToTod(clientToServerMessageContents.TimeOfDay)
+		// Create server's response
+		timeOfDay := crypto_utils.TodToBytes(currentTime)
 
-	// Check signature validity
-	validSignature := crypto_utils.Verify(
-		clientToServerMessageContents.Signature, 
-		crypto_utils.Hash(signingMessage), 
-		clientVerificationKey)
-	
-	// Check name matching and time validity
-	validName := strings.EqualFold(messageClientToServer.Name, clientToServerMessageContents.Name)
-	validTime := clientTime.Before(currentTime) && currentTime.Sub(clientTime) <= 5*time.Minute
+		opString := fmt.Sprintf("%d", int(LOGIN))
+		
+		serverSigningMessage := []byte(name + request.Uid + opString)
+		serverSigningMessage = append(serverSigningMessage, timeOfDay...)
+		serverSigningMessage = append(serverSigningMessage, crypto_utils.PublicKeyToBytes(publicKey)...)
+		
+		// Sign server message with proper hashing
+		serverSignature := crypto_utils.Sign(serverSigningMessage, privateKey)
 
-	if !validSignature || !validName || !validTime {
-		fmt.Println("Error: Client verification failed")
-		return AuthNetworkData{
-			Name:    name,
-			Payload: nil,
+		// Create encrypted contents of the message
+		serverMessageContents := ServerToClientEncryptedContents{
+			Name:                  name,
+			Uid:                   request.Uid,
+			Op:                    opString,
+			ServerVerificationKey: crypto_utils.PublicKeyToBytes(publicKey),
+			TimeOfDay:             timeOfDay,
+			Signature:             serverSignature,
 		}
-	}
 
-	// Get user ID from the request
-	uid := clientToServerMessageContents.Uid
+		// Update Binding Table
 
-	// Create server's response
-	timeOfDay := crypto_utils.TodToBytes(currentTime)
-	
-	opString := "LOGIN"
-	
-	serverSigningMessage := []byte(name + uid + opString)
-	serverSigningMessage = append(serverSigningMessage, timeOfDay...)
-	serverVerificationKeyBytes := crypto_utils.PublicKeyToBytes(publicKey)
-	serverSigningMessage = append(serverSigningMessage, serverVerificationKeyBytes...)
-	
-	// Sign server message with proper hashing
-	serverSignature := crypto_utils.Sign(serverSigningMessage, privateKey)
-
-	// Create encrypted contents of the message
-	serverMessageContents := ServerToClientEncryptedContents{
-		Name:                  name,
-		Uid:                   uid,
-		Op:                    opString,
-		ServerVerificationKey: serverVerificationKeyBytes,
-		TimeOfDay:             timeOfDay,
-		Signature:             serverSignature,
-	}
-
-	serverMessage, err := json.Marshal(serverMessageContents)
-	if err != nil {
-		fmt.Println("Error: Failed to marshal server contents:", err)
-		return AuthNetworkData{
-			Name:    name,
-			Payload: nil,
+		if BindingTable == nil {
+			BindingTable = make(map[string]BindingTableData)
 		}
-	}
 
-	// Create server's message to client
-	messageToClientBytes, _ := json.Marshal(MessageServerToClient{
-		Name:             name,
-		MessageEncrypted: crypto_utils.EncryptSK(serverMessage, sharedKey),
-	})
+		serverMessage, err := json.Marshal(serverMessageContents)
+		if err != nil {
+			fmt.Println("Error: Failed to marshal server contents:", err)
+			response.Status = FAIL
+			return
+		}
 
-	// Save the session info to binding table
-	BindingTable[uid] = BindingTableData{
-		ClientVerificationKey: clientVerificationKey,
-		RecentLoginTime:       currentTime,
-		IsActive:              true,
-	}
-	
-	// Set active session
-	session_active = true
-	current_user = uid
-	
-	fmt.Println("Authentication successful for user:", uid)
-	
-	return AuthNetworkData{
-		Name:    name,
-		Payload: messageToClientBytes,
+		// create server's message to client
+		messageToClientBytes, _ := json.Marshal(MessageServerToClient{
+			Name:             name,
+			MessageEncrypted: crypto_utils.EncryptSK(serverMessage, sharedKey),
+		})
+		response.Message = messageToClientBytes
+
+		session_active = true
+		current_user = request.Uid
+		response.Status = OK
+		response.Uid = request.Uid
 	}
 }
-
-// IsAuthenticated checks if a user is authenticated
-func IsAuthenticated(uid string) bool {
-	session, exists := BindingTable[uid]
-	return exists && session.IsActive
-}
-
-// GetSessionKey retrieves the session key for an authenticated user
-// func GetSessionKey(uid string) []byte {
-// 	if session, exists := BindingTable[uid]; exists && session.IsActive {
-// 		return session.SessionKey
-// 	}
-// 	return nil
-// }
-
-// InvalidateSession removes a user's session
-// func InvalidateSession(uid string) {
-// 	delete(BindingTableData, uid)
-// }
 
 // When the session is active all the session to logout
 func doLogout(request *Request, response *Response) {
