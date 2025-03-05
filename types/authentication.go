@@ -38,4 +38,15 @@ type ServerToClientEncryptedContents struct {
 type BindingTableData struct {
 	ClientVerificationKey *rsa.PublicKey
 	RecentLoginTime       time.Time
+	IsActive bool
+}
+type AuthNetworkData struct {
+	Name    string
+	Payload []byte
+}
+
+type AuthSession struct {
+	IsAuthenticated bool
+	SessionKey      []byte
+	Uid             string
 }

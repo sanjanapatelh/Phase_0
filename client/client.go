@@ -21,6 +21,15 @@ var Responses chan NetworkData
 
 var serverPublicKey *rsa.PublicKey
 
+var (
+	AuthRequests  = make(chan AuthNetworkData, 10)
+	AuthResponses = make(chan AuthNetworkData, 10)
+)
+
+var currentSession = AuthSession{
+	IsAuthenticated: false,
+}
+
 func init() {
 	name = uuid.NewString()
 	Requests = make(chan NetworkData)
@@ -128,25 +137,25 @@ func doLogin(request *Request, response *Response){
 		return
 	}
 
-	request.Message = messageToServerBytes
-
-	doOp(request, response)
-
-	if response.Status != OK {
-		fmt.Printf("Server returned error status: %v\n", response.Status)
-		return
+	// 5. Send auth data and receive response
+	authNetworkData := AuthNetworkData{
+		Name:    name,
+		Payload: messageToServerBytes,
 	}
-
-	messageFromServer := response.Message
+	
+	responseData := SendAuthAndReceive(authNetworkData)
+	messageFromServer := responseData.Payload
 
 	if messageFromServer == nil {
 		fmt.Println("Message is empty")
+		response.Status = FAIL
 		return
 	}
 
 	serverMessage := MessageServerToClient{}
 	if err := json.Unmarshal(messageFromServer, &serverMessage); err != nil {
 		fmt.Println("Failed to unmarshal server message:", err)
+		response.Status = FAIL
 		return
 	}
 
@@ -154,11 +163,13 @@ func doLogin(request *Request, response *Response){
 	decryptedMessageBytes, err := crypto_utils.DecryptSK(encryptedContentsBytesServer, sharedKey)
 	if err != nil {
 		fmt.Println("Failed to decrypt server message:", err)
+		response.Status = FAIL
 		return
 	}
 	serverContents := ServerToClientEncryptedContents{}
 	if err := json.Unmarshal(decryptedMessageBytes, &serverContents); err != nil {
 		fmt.Println("Failed to unmarshal server contents:", err)
+		response.Status = FAIL
 		return
 	}
 
@@ -166,6 +177,7 @@ func doLogin(request *Request, response *Response){
 	serverVerificationKey, err := crypto_utils.BytesToPublicKey(serverContents.ServerVerificationKey)
 	if err != nil {
 		fmt.Println("Failed to parse server verification key:", err)
+		response.Status = FAIL
 		return
 	}
 	
@@ -178,11 +190,13 @@ func doLogin(request *Request, response *Response){
 	serverTOD := crypto_utils.BytesToTod(serverContents.TimeOfDay)
 	if !serverTOD.Before(crypto_utils.ReadClock().Add(5 * time.Minute)) {
 		fmt.Println("Server time of day is too far in the future")
+		response.Status = FAIL
 		return
 	}
 	
 	if crypto_utils.ReadClock().Sub(serverTOD) > 5*time.Minute {
 		fmt.Println("Server time of day is too old")
+		response.Status = FAIL
 		return
 	}
 	
@@ -199,23 +213,28 @@ func doLogin(request *Request, response *Response){
 	// 10. Process verification results
 	if !validSignature {
 		fmt.Println("Server signature verification failed")
+		response.Status = FAIL
 		return
 	}
 	
 	if !namesMatch {
 		fmt.Printf("Server name mismatch: expected %s, got %s\n", 
 			serverMessage.Name, serverContents.Name)
+		response.Status = FAIL
 		return
 	}
 	
 	if !uidMatch {
 		fmt.Printf("User ID mismatch: expected %s, got %s\n", 
 			request.Uid, serverContents.Uid)
+		response.Status = FAIL
 		return
 	}
 	
 	fmt.Println("Login succeeded! All verifications passed.")
-	response.Message = nil
+	response.Status = OK
+	response.Uid = request.Uid
+	// response.Message = nil
 }
 
 func doOp(request *Request, response *Response) {
@@ -226,4 +245,10 @@ func doOp(request *Request, response *Response) {
 func sendAndReceive(toSend NetworkData) NetworkData {
 	Requests <- toSend
 	return <-Responses
+}
+
+// SendAuthAndReceive sends authentication data and waits for response
+func SendAuthAndReceive(toSend AuthNetworkData) AuthNetworkData {
+	AuthRequests <- toSend
+	return <-AuthResponses
 }
