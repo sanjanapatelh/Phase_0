@@ -3,7 +3,9 @@ package server
 import (
 	"crypto/rsa"
 	"encoding/json"
+	"fmt"
 	"os"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -22,7 +24,8 @@ var Responses chan NetworkData
 //code changes begin
 
 var current_user string
-var session_alive bool
+var session_active bool
+var BindingTable map[string]BindingTableData
 
 // code changes End
 
@@ -73,9 +76,7 @@ func doOp(request *Request, response *Response) {
 	response.Status = FAIL
 	response.Uid = current_user
 
-	
-
-	if session_alive {
+	if session_active {
 
 		switch request.Op {
 		case NOOP:
@@ -155,8 +156,8 @@ func doWriteVal(request *Request, response *Response) {
 
 // Copy function
 func doCopy(request *Request, response *Response) {
-// Check for src_key abd dst_key being empty 
-// Assign the value of requested src_key value to det_key
+	// Check for src_key abd dst_key being empty
+	// Assign the value of requested src_key value to det_key
 	if _, ok := kvstore[request.Src_key]; ok {
 		if _, ok := kvstore[request.Dst_key]; ok {
 			kvstore[request.Dst_key] = kvstore[request.Src_key]
@@ -166,27 +167,152 @@ func doCopy(request *Request, response *Response) {
 	}
 }
 
-//Login 
+// Login
 // Create session for the user and doesnot allow any other user to login.
 func doLogin(request *Request, response *Response) {
 
-	if !session_alive {
-		session_alive = true
+	if !session_active {
+		messageFromClient := request.Message
+		if messageFromClient == nil {
+			fmt.Println("Message is empty")
+			response.Status = FAIL
+			return
+		}
+
+		// Parse client message
+		messageClientToServer := MessageClientToServer{}
+
+		if err := json.Unmarshal(messageFromClient, &messageClientToServer); err != nil {
+			fmt.Println("Error: Failed to unmarshal client message:", err)
+			response.Status = FAIL
+			return
+		}
+
+		// Decrypt shared key
+		sharedKeyEncrypted := messageClientToServer.SharedKeyEncrypted
+		if sharedKeyEncrypted == nil || len(sharedKeyEncrypted) == 0 {
+			fmt.Println("Error: Shared key is empty")
+			response.Status = FAIL
+			return
+		}
+
+		sharedKey, err := crypto_utils.DecryptPK(sharedKeyEncrypted, privateKey)
+		if err != nil {
+			fmt.Println("Error: Failed to decrypt shared key:", err)
+			response.Status = FAIL
+			return
+		}
+
+		// decrypt message contents using shared key
+		encryptedContentsBytes := messageClientToServer.MessageEncrypted
+
+		decryptedMessageBytes, err := crypto_utils.DecryptSK(encryptedContentsBytes, sharedKey)
+		if err != nil {
+			fmt.Println("Error: Failed to decrypt message contents:", err)
+			response.Status = FAIL
+			return
+		}
+
+		clientToServerMessageContents := ClientToServerEncryptedContents{}
+		if err := json.Unmarshal(decryptedMessageBytes, &clientToServerMessageContents); err != nil {
+			fmt.Println("Error: Failed to unmarshal decrypted contents:", err)
+			response.Status = FAIL
+			return
+		}
+
+		// Build signing message for verification
+		signingMessage := []byte(clientToServerMessageContents.Name + clientToServerMessageContents.Uid + clientToServerMessageContents.Op)
+		signingMessage = append(signingMessage, clientToServerMessageContents.TimeOfDay...)
+		signingMessage = append(signingMessage, clientToServerMessageContents.ClientVerificationKey...)
+
+		// Parse client verification key
+		clientVerificationKey, err := crypto_utils.BytesToPublicKey(clientToServerMessageContents.ClientVerificationKey)
+		if err != nil {
+			fmt.Println("Error: Failed to parse client verification key:", err)
+			response.Status = FAIL
+			return
+		}
+
+		currentTime := crypto_utils.ReadClock()
+		clientTime := crypto_utils.BytesToTod(clientToServerMessageContents.TimeOfDay)
+
+		validSignature := crypto_utils.Verify(
+			clientToServerMessageContents.Signature, 
+			crypto_utils.Hash(signingMessage), 
+			clientVerificationKey)
+		
+		validName := strings.EqualFold(messageClientToServer.Name, clientToServerMessageContents.Name)
+		validTime := clientTime.Before(currentTime)
+
+		if !validSignature || !validName || !validTime {
+			fmt.Println("Error: Client verification failed")
+			response.Status = FAIL
+			return
+		}
+
+		// Create server's response
+		timeOfDay := crypto_utils.TodToBytes(currentTime)
+
+		opString := fmt.Sprintf("%d", int(LOGIN))
+		
+		serverSigningMessage := []byte(name + request.Uid + opString)
+		serverSigningMessage = append(serverSigningMessage, timeOfDay...)
+		serverSigningMessage = append(serverSigningMessage, crypto_utils.PublicKeyToBytes(publicKey)...)
+		
+		// Sign server message with proper hashing
+		serverSignature := crypto_utils.Sign(serverSigningMessage, privateKey)
+
+		// Create encrypted contents of the message
+		serverMessageContents := ServerToClientEncryptedContents{
+			Name:                  name,
+			Uid:                   request.Uid,
+			Op:                    opString,
+			ServerVerificationKey: crypto_utils.PublicKeyToBytes(publicKey),
+			TimeOfDay:             timeOfDay,
+			Signature:             serverSignature,
+		}
+
+		// Update Binding Table
+
+		if BindingTable == nil {
+			BindingTable = make(map[string]BindingTableData)
+		}
+
+		serverMessage, err := json.Marshal(serverMessageContents)
+		if err != nil {
+			fmt.Println("Error: Failed to marshal server contents:", err)
+			response.Status = FAIL
+			return
+		}
+
+		// create server's message to client
+		messageToClientBytes, _ := json.Marshal(MessageServerToClient{
+			Name:             name,
+			MessageEncrypted: crypto_utils.EncryptSK(serverMessage, sharedKey),
+		})
+		response.Message = messageToClientBytes
+
+		session_active = true
 		current_user = request.Uid
 		response.Status = OK
 		response.Uid = request.Uid
 	}
 }
 
-
 // When the session is active all the session to logout
 func doLogout(request *Request, response *Response) {
-	if session_alive {
-		session_alive = false
+	if session_active {
+		session_active = false
 		response.Status = OK
 		response.Uid = current_user
 		current_user = ""
+
+		// delete  data from binding table
+		if data, exists := BindingTable[request.Uid]; exists {
+			data.ClientVerificationKey = nil // Remove verification key
+			BindingTable[request.Uid] = data         // Update the entry
+		}
+		//
+
 	}
 }
-
-// code changes ends

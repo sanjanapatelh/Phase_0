@@ -20,4 +20,6 @@ type Request struct {
 	Src_key string      `json:"src_key"`
 	Dst_key string      `json:"dst_key"`
 	Uid     string      `json:"uid"`
+
+	Message []byte `json:"message,omitempty"`
 }

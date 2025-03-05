@@ -22,7 +22,7 @@ func RandomBytes(size int) []byte {
 	return arr
 }
 
-func NewPrivateKey() *rsa.PrivateKey  {
+func NewPrivateKey() *rsa.PrivateKey {
 	reader := rand.Reader
 	bitSize := 2048
 	privateKey, err := rsa.GenerateKey(reader, bitSize)
@@ -68,10 +68,10 @@ func DecryptPK(ciphertext []byte, privateKey *rsa.PrivateKey) ([]byte, error) {
 func NewSessionKey() []byte {
 	sessionKey := make([]byte, 32)
 	_, err := rand.Read(sessionKey)
-    if err != nil {
-        panic(err)
-    }
-    return sessionKey
+	if err != nil {
+		panic(err)
+	}
+	return sessionKey
 }
 
 func EncryptSK(plaintext []byte, sessionKey []byte) []byte {
@@ -168,7 +168,7 @@ func TodToBytes(t time.Time) []byte {
 }
 
 func BytesToTod(t []byte) time.Time {
-	var tod time.Time 
+	var tod time.Time
 	err := tod.UnmarshalBinary(t)
 	if err != nil {
 		panic(err)
