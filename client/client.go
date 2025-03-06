@@ -84,6 +84,7 @@ func doLogin(request *Request, response *Response) {
 	// 1. Generate and encrypt shared key using server's public key
 	if session.Active == true {
 		response.Status = FAIL
+		response.Uid = session.UserID
 		return
 	}
 	sharedKey := crypto_utils.NewSessionKey()
