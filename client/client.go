@@ -179,7 +179,6 @@ func doLogin(request *Request, response *Response) {
 	// Login successful
 	response.Status = OK
 	response.Uid = request.Uid
-	fmt.Println("Login succeeded! All verifications passed.")
 }
 
 func doSecureOp(request *Request, response *Response) {
