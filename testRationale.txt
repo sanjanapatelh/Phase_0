@@ -1,3 +1,69 @@
+SECURITY PROPERTIES TESTED
+
+1. Replay Attack Resistance
+
+The network_simulator.go implementation tests the system's ability to detect and reject replayed messages. This verifies several critical security properties:
+
+- Nonce Uniqueness**: Each message should contain a unique nonce that is checked during verification
+- Session State Management: The system should maintain state about previously seen messages
+- Authentication Integrity: Authentication should fail if a previous auth message is replayed
+
+2. Cryptographic Validation
+
+By replaying messages, we also test the cryptographic validation mechanisms:
+
+- Signature Verification: The system should verify digital signatures on all messages
+- Decryption Security: The decryption process should validate message integrity
+- Session Key Management*: Session keys should be properly managed for each session
+
+3. Error Handling
+
+The test also evaluates how the system handles invalid security conditions:
+
+- Graceful Failure: Security violations should result in proper error handling, not crashes
+- Clear Error Reporting: The system should report security failures clearly
+- Denial of Replayed Operations: Replayed operations should be denied with appropriate status codes
+
+Testing Approach
+
+The network.go implementation uses a simple yet effective approach to test replay attacks:
+
+1. It captures the first message (typically a LOGIN request)
+2. It forwards messages normally until it reaches the third message
+3. On the third message, it replays the first message instead
+4. It analyzes the system's response to determine if the attack was detected
+
+This approach specifically tests what happens when a legitimate message is captured and replayed later in the conversation.
+
+Expected Outcomes
+
+A secure implementation should:
+
+1. Detect that the replayed message contains a nonce that has already been used
+2. Reject the replayed authentication attempt with a FAIL status or error
+3. Maintain the security of the session despite the attack attempt
+4. Not crash or enter an inconsistent state due to the attack
+
+Test Results Interpretation
+
+The testing code tries to determine the outcome by checking the response payload:
+
+- If the response contains "FAIL", the system successfully detected and rejected the replay
+- If the response contains "OK", the system failed to detect the replay (security issue)
+- If the system crashes with crypto-related errors, it likely detected the issue but needs better error handling
+
+DOLEV_YAO MODEL COVERAGE
+This test addresses a key aspect of the Dolev-Yao attack model, which assumes an attacker can:
+
+- Intercept any message on the network
+- Record messages for later use
+- Replay previously sent messages
+
+By testing replay attacks, we're validating that the system is resilient against one of the most common and practical network attacks in the Dolev-Yao model.
+
+
+KEY_VALUE STORE FUNCTIONALITY TESTING(same as phase 0)
+
 Part A :
     (All the test cases are authorized and session is active , just tested for the functionality of COPY  )
     Test Cases are in file Test/a1
@@ -63,5 +129,3 @@ Part B(b1):
         2. Hence there is no active session available which blocked all the operations. 
         3. User trying to log out without a session fails.
         
-
-    
