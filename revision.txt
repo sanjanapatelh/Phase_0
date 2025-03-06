@@ -1,0 +1,57 @@
+Updated Protocal :
+
+C = Client 
+U = Uid 
+Kc = Client Public Key
+kc = Client Private Key
+Ks = Server Public Key 
+ks = Server Private Key
+Kcs = Session Key 
+n = nonce
+
+ToD = Time of Day
+
+1. Client initiates connection request :
+    m := C , U , LOGIN , Kc , ToD
+    Sc(Signature of client) = kc - sign(m)
+    Client generates session key - Kcs 
+
+    C -> S : C , Ks-Enc{Kcs} , Kcs-Enc{m,Sc}
+
+2. Server Validates the data :
+    a. Decrypts Session Key 
+        Kcs = ks-Dec{Ks-Enc{kcs}}
+    b. Extracts message and sign 
+        m , Sc = Kcs-Dec{ Kcs - Enc{ m, Sc } }
+    c. Server verifies the signature proceeds if succeeds. 
+    d. Validates client name
+        Checks whether the Client name inside message same as Client (  C == m.C )
+    e. Validates Time :
+        Server maintains Binding table which records Uid , recent login time , verification key of client
+        Validates : recent Login time < m.tod < current time .
+        If fails -> Abort . 
+    f. Sends Message back to Client ( success or failure )
+        Server Message if success :
+        m' := S , m.U , LOGIN , m.tod , Ks , OK 
+        Ss( sign' ) : = ks-sign(m')
+
+    S -> C : S , Kcs-Enc{ m' , Sign'}
+
+3. Client Verifies the message from server 
+    a. Client Decrypts using session key
+        m' , sign' = Kcs-Dec{  Kcs-Enc{ m' , Sign'} }
+    b. Client verifies signature ( Return if fails )
+    c. Validates server name ( S == m'.S )
+    d. Validates time : m'.tod < current time 
+
+
+
+
+
+Reasons for changes: 
+1. Included Digital signature which will insure integrity of the data. 
+2. Removed multiple nonce being used ,  Reduces computational overhead and simplifies implementation.
+3. Introduces Binding table which allows for better session management and tracking.
+4. Encapsulates all fields into a single signed and encrypted message.which Improves integrity.
+5. Previously Used asymmetric encryption for key exchange and symmetric for messages.
+   Changed to the session key (Kcs) for all encryption after key exchange.Which is Consistent, efficient, and secure.
