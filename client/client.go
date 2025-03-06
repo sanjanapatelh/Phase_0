@@ -3,14 +3,12 @@ package client
 import (
 	"crypto/rsa"
 	"encoding/json"
-	"fmt"
-	"strings"
-	"time"
-
 	"os"
+	"strings"
 
 	"github.com/google/uuid"
 
+	"auth_utils"
 	"crypto_utils"
 	. "types"
 )
@@ -18,13 +16,18 @@ import (
 var name string
 var Requests chan NetworkData
 var Responses chan NetworkData
-
 var serverPublicKey *rsa.PublicKey
+
+// Session data for the client
+var session *auth_utils.SessionData
 
 func init() {
 	name = uuid.NewString()
 	Requests = make(chan NetworkData)
 	Responses = make(chan NetworkData)
+	
+	// Initialize session data
+	session = auth_utils.InitSessionData(name, nil)
 }
 
 func ObtainServerPublicKey() {
@@ -39,17 +42,19 @@ func ObtainServerPublicKey() {
 }
 
 func ProcessOp(request *Request) *Response {
-
-	response := &Response{Status: FAIL}
+	response := &Response{Status: FAIL, Uid: session.UserID}
 	if validateRequest(request) {
 		switch request.Op {
-		case CREATE, DELETE, READ, WRITE, COPY, LOGOUT:
-			doOp(request, response)
 		case LOGIN:
-			doLogin(request, response)
+			if !session.Active{
+				doLogin(request, response)
+			}
+		case LOGOUT, CREATE, DELETE, READ, WRITE, COPY:
+			if session.Active {
+				doSecureOp(request, response)
+			}
 		default:
-			// struct already default initialized to
-			// FAIL status
+			// struct already default initialized to FAIL status
 		}
 	}
 	return response
@@ -57,7 +62,6 @@ func ProcessOp(request *Request) *Response {
 
 func validateRequest(r *Request) bool {
 	// Restrict request without UID
-
 	switch r.Op {
 	case CREATE, WRITE:
 		return r.Key != "" && r.Val != nil
@@ -74,153 +78,163 @@ func validateRequest(r *Request) bool {
 	}
 }
 
-func doLogin(request *Request, response *Response){
-
+func doLogin(request *Request, response *Response) {
 	// 1. Generate and encrypt shared key using server's public key
 	sharedKey := crypto_utils.NewSessionKey()
 	if sharedKey == nil {
-		fmt.Println("Failed to generate session key")
+		response.Status = FAIL
 		return
 	}
 	sharedKeyEncrypted := crypto_utils.EncryptPK(sharedKey, serverPublicKey)
 
-	// 2. Prepare client's signature with proper data
-	currentTOD := crypto_utils.ReadClock()
-	timeOfDay := crypto_utils.TodToBytes(currentTOD)
-
-	// Generate a new signing key for this session
+	// 2. Generate a new signing key for this session
 	clientSigningKey := crypto_utils.NewPrivateKey()
 	clientVerificationKey := crypto_utils.PublicKeyToBytes(&clientSigningKey.PublicKey)
 
-	// Build the signing message with all components
-	signingMessage := []byte(name + request.Uid + string(rune(request.Op)))
-	signingMessage = append(signingMessage, timeOfDay...)
-	signingMessage = append(signingMessage, clientVerificationKey...)
-
-	clientSignature := crypto_utils.Sign(signingMessage, clientSigningKey)
-
-	// 3. Create encrypted contents with proper error handling
-	encryptedContents := ClientToServerEncryptedContents{
-		Name:                 name,
-		Uid:                  request.Uid,
-		Op:                   string(rune(request.Op)),
-		ClientVerificationKey: clientVerificationKey,
-		TimeOfDay:            timeOfDay,
-		Signature:            clientSignature,
-	}
-
-	encryptedContentsBytes, err := json.Marshal(encryptedContents)
-	if err != nil {
-		fmt.Println("Failed to marshal encrypted contents:", err)
-		return
-	}
-
-	// 4. Create the message to server - assign rather than append
-	messageToServer := MessageClientToServer{
-		Name:               name,
-		SharedKeyEncrypted: sharedKeyEncrypted,
-		MessageEncrypted:   crypto_utils.EncryptSK(encryptedContentsBytes, sharedKey),
-	}
-
-	messageToServerBytes, err := json.Marshal(messageToServer)
-	if err != nil {
-		fmt.Println("Failed to marshal message to server:", err)
-		return
-	}
-
-	request.Message = messageToServerBytes
-
-	doOp(request, response)
-
-	if response.Status != OK {
-		fmt.Printf("Server returned error status: %v\n", response.Status)
-		return
-	}
-
-	messageFromServer := response.Message
-
-	if messageFromServer == nil {
-		fmt.Println("Message is empty")
-		return
-	}
-
-	serverMessage := MessageServerToClient{}
-	if err := json.Unmarshal(messageFromServer, &serverMessage); err != nil {
-		fmt.Println("Failed to unmarshal server message:", err)
-		return
-	}
-
-	encryptedContentsBytesServer := serverMessage.MessageEncrypted
-	decryptedMessageBytes, err := crypto_utils.DecryptSK(encryptedContentsBytesServer, sharedKey)
-	if err != nil {
-		fmt.Println("Failed to decrypt server message:", err)
-		return
-	}
-	serverContents := ServerToClientEncryptedContents{}
-	if err := json.Unmarshal(decryptedMessageBytes, &serverContents); err != nil {
-		fmt.Println("Failed to unmarshal server contents:", err)
-		return
-	}
-
-	// 9. Verify server's identity and signature
-	serverVerificationKey, err := crypto_utils.BytesToPublicKey(serverContents.ServerVerificationKey)
-	if err != nil {
-		fmt.Println("Failed to parse server verification key:", err)
-		return
-	}
-	
-	// Build server signing message for verification
-	serverSigningMessage := []byte(serverContents.Name + serverContents.Uid + serverContents.Op)
-	serverSigningMessage = append(serverSigningMessage, serverContents.TimeOfDay...)
-	serverSigningMessage = append(serverSigningMessage, serverContents.ServerVerificationKey...)
-
-	// Check server's time of day
-	serverTOD := crypto_utils.BytesToTod(serverContents.TimeOfDay)
-	if !serverTOD.Before(crypto_utils.ReadClock().Add(5 * time.Minute)) {
-		fmt.Println("Server time of day is too far in the future")
-		return
-	}
-	
-	if crypto_utils.ReadClock().Sub(serverTOD) > 5*time.Minute {
-		fmt.Println("Server time of day is too old")
-		return
-	}
-	
-	// Verify all security components
-	validSignature := crypto_utils.Verify(
-		serverContents.Signature, 
-		crypto_utils.Hash(serverSigningMessage), 
-		serverVerificationKey,
+	// 3. Create the authentication message
+	opString := string(rune(request.Op))
+	authContentBytes, err := auth_utils.CreateAuthMessage(
+		name, 
+		request.Uid, 
+		opString, 
+		clientVerificationKey, 
+		clientSigningKey,
 	)
 	
-	namesMatch := strings.EqualFold(serverContents.Name, serverMessage.Name)
-	uidMatch := serverContents.Uid == request.Uid
-	
-	// 10. Process verification results
-	if !validSignature {
-		fmt.Println("Server signature verification failed")
+	if err != nil {
+		response.Status = FAIL
 		return
 	}
 	
-	if !namesMatch {
-		fmt.Printf("Server name mismatch: expected %s, got %s\n", 
-			serverMessage.Name, serverContents.Name)
+	// 4. Encrypt the auth content with shared key
+	encryptedAuthBytes := auth_utils.EncryptAuthMessage(authContentBytes, sharedKey)
+	
+	// 5. Create the auth request to send to server
+	authRequest := AuthRequest{
+		SharedKeyEncrypted: sharedKeyEncrypted,
+		MessageEncrypted:   encryptedAuthBytes,
+	}
+
+	// 6. Marshal the auth request
+	authRequestBytes, err := json.Marshal(authRequest)
+	if err != nil {
+		response.Status = FAIL
+		return
+	}
+
+	// 7. Send auth request and receive response
+	networkData := sendAndReceive(NetworkData{Payload: authRequestBytes, Name: name})
+
+	// 8. Parse auth response
+	var authResponse AuthResponse
+	if err := json.Unmarshal(networkData.Payload, &authResponse); err != nil {
+		response.Status = FAIL
 		return
 	}
 	
-	if !uidMatch {
-		fmt.Printf("User ID mismatch: expected %s, got %s\n", 
-			request.Uid, serverContents.Uid)
+	// 9. Verify server public key
+	serverVerificationKey, err := crypto_utils.BytesToPublicKey(crypto_utils.PublicKeyToBytes(serverPublicKey))
+	if err != nil {
+		response.Status = FAIL
+		return
+	}
+
+	// 10. Verify and decrypt the server's response
+	innerServerMessage, valid, err := auth_utils.VerifyAndDecryptAuthMessage(
+		authResponse.MessageEncrypted,
+		sharedKey,
+		serverVerificationKey,
+		"",
+		request.Uid,
+	)
+	
+	if err != nil {
+		response.Status = FAIL
 		return
 	}
 	
-	fmt.Println("Login succeeded! All verifications passed.")
-	response.Message = nil
+	if !valid {
+		response.Status = FAIL
+		return
+	}
+	
+	// 11. Check server name matches
+	if !strings.EqualFold(innerServerMessage.Name, networkData.Name) {
+		response.Status = FAIL
+		return
+	}
+	
+	// 12. Parse server verification key from inner message
+	serverVerificationKey, err = crypto_utils.BytesToPublicKey(innerServerMessage.VerificationKey)
+	if err != nil {
+		response.Status = FAIL
+		return
+	}
+	
+	// 13. Store session data for subsequent requests
+	session.Active = true
+	session.SharedKey = sharedKey
+	session.SigningKey = clientSigningKey
+	session.VerificationKey = serverVerificationKey
+	session.UserID = request.Uid
+	
+	// Login successful
+	response.Status = OK
+	response.Uid = request.Uid
 }
 
-func doOp(request *Request, response *Response) {
-	requestBytes, _ := json.Marshal(request)
-	json.Unmarshal(sendAndReceive(NetworkData{Payload: requestBytes, Name: name}).Payload, &response)
+func doSecureOp(request *Request, response *Response) {
+	// 1. Create secure request
+	secureMessage, err := auth_utils.EncryptRequest(request, session)
+	if err != nil {
+		response.Status = FAIL
+		return
+	}
+	
+	// 2. Marshal secure message
+	secureMessageBytes, err := json.Marshal(secureMessage)
+	if err != nil {
+		response.Status = FAIL
+		return
+	}
+	
+	// 3. Send secure message and receive secure response
+	networkData := sendAndReceive(NetworkData{Payload: secureMessageBytes, Name: name})
+	
+	// 4. Parse secure response
+	var secureResponseMessage SecureMessage
+	if err := json.Unmarshal(networkData.Payload, &secureResponseMessage); err != nil {
+		response.Status = FAIL
+		return
+	}
+	
+	// 5. Decrypt and verify secure response
+	decryptedResponse, valid, err := auth_utils.DecryptResponse(&secureResponseMessage, session)
+	if err != nil {
+		response.Status = FAIL
+		return
+	}
+	
+	if !valid {
+		response.Status = FAIL
+		return
+	}
+	
+	// 6. Copy response data
+	response.Status = decryptedResponse.Status
+	response.Val = decryptedResponse.Val
+	response.Uid = decryptedResponse.Uid
+	
+	// 7. Handle logout specially - clear session if logout was successful
+	if request.Op == LOGOUT && response.Status == OK {
+		session.Active = false
+		session.SharedKey = nil
+		session.UserID = ""
+		// Clear nonce map on logout
+		if session.SeenNonces != nil {
+			session.SeenNonces = make(map[string]bool)
+		}
+	}
 }
 
 func sendAndReceive(toSend NetworkData) NetworkData {

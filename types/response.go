@@ -11,5 +11,4 @@ type Response struct {
 	Status 	Code 		 `json:"status"`
 	Val  	interface{}	 `json:"val"`
 	Uid 	string 		 `json:"uid"`
-	Message []byte `json:"message,omitempty"`
 }
