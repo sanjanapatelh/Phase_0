@@ -3,7 +3,6 @@ package server
 import (
 	"crypto/rsa"
 	"encoding/json"
-	"fmt"
 	"os"
 
 	"github.com/google/uuid"
@@ -38,13 +37,8 @@ func init() {
 	BindingTable = make(map[string]BindingTableData)
 	Requests = make(chan NetworkData)
 	Responses = make(chan NetworkData)
-	
-	// Initialize session
-	session = &auth_utils.SessionData{
-		Active:     false,
-		Name:       name,
-		SigningKey: privateKey,
-	}
+
+	session = auth_utils.InitSessionData(name, privateKey)
 
 	go receiveThenSend()
 }
@@ -78,10 +72,10 @@ func process(requestData NetworkData) NetworkData {
 	
 	// Check if it's a secure operation request
 	if session.Active {
-		var secureRequest SecureRequest
-		if err := json.Unmarshal(requestData.Payload, &secureRequest); err == nil {
+		var secureMessage SecureMessage
+		if err := json.Unmarshal(requestData.Payload, &secureMessage); err == nil {
 			// This is a secure request during an active session
-			processSecureRequest(&secureRequest, requestData.Name, &responseBytes)
+			processSecureRequest(&secureMessage, &responseBytes)
 			return NetworkData{Payload: responseBytes, Name: name}
 		}
 	}
@@ -104,21 +98,20 @@ func process(requestData NetworkData) NetworkData {
 }
 
 // Process a secure request during an active session
-func processSecureRequest(secureRequest *SecureRequest, clientName string, responseBytes *[]byte) {
+func processSecureRequest(secureMessage *SecureMessage, responseBytes *[]byte) {
 	// Default failure response
 	response := Response{Status: FAIL, Uid: session.UserID}
-	secureResponse, err := auth_utils.EncryptResponse(&response, session)
+	secureResponseMessage, err := auth_utils.EncryptResponse(&response, session)
 	if err != nil {
-		secureResponseBytes, _ := json.Marshal(secureResponse)
+		secureResponseBytes, _ := json.Marshal(secureResponseMessage)
 		*responseBytes = secureResponseBytes
 		return
 	}
 	
 	// 1. Decrypt and verify the secure request
-	request, valid, err := auth_utils.DecryptRequest(secureRequest, session)
+	request, valid, err := auth_utils.DecryptRequest(secureMessage, session)
 	if err != nil || !valid {
-		fmt.Println("Error processing secure request:", err)
-		secureResponseBytes, _ := json.Marshal(secureResponse)
+		secureResponseBytes, _ := json.Marshal(secureResponseMessage)
 		*responseBytes = secureResponseBytes
 		return
 	}
@@ -127,16 +120,15 @@ func processSecureRequest(secureRequest *SecureRequest, clientName string, respo
 	doOp(request, &response)
 	
 	// 3. Encrypt the response
-	secureResponse, err = auth_utils.EncryptResponse(&response, session)
+	secureResponseMessage, err = auth_utils.EncryptResponse(&response, session)
 	if err != nil {
-		fmt.Println("Error encrypting response:", err)
-		secureResponseBytes, _ := json.Marshal(secureResponse)
+		secureResponseBytes, _ := json.Marshal(secureResponseMessage)
 		*responseBytes = secureResponseBytes
 		return
 	}
 	
 	// 4. Marshal the secure response
-	secureResponseBytes, _ := json.Marshal(secureResponse)
+	secureResponseBytes, _ := json.Marshal(secureResponseMessage)
 	*responseBytes = secureResponseBytes
 	
 	// 5. Special handling for logout
@@ -145,8 +137,143 @@ func processSecureRequest(secureRequest *SecureRequest, clientName string, respo
 		session.SharedKey = nil
 		session.UserID = ""
 		session.VerificationKey = nil
-		session.PeerName = ""
+		// Clear nonce map on logout
+		if session.SeenNonces != nil {
+			session.SeenNonces = make(map[string]bool)
+		}
 	}
+}
+
+// Process authentication-based login request
+func processAuthLogin(authRequest *AuthRequest, clientName string, response *Response, authResponse *AuthResponse) {
+	response.Status = FAIL
+	
+	if session.Active {
+		response.Status = FAIL
+		return
+	}
+	
+	// 1. Decrypt shared key
+	sharedKey, err := crypto_utils.DecryptPK(authRequest.SharedKeyEncrypted, privateKey)
+	if err != nil {
+		response.Status = FAIL
+		return
+	}
+	
+	// 2. Verify and decrypt client message
+	// First, we need to parse the client verification key
+	// Since we don't have it yet, we'll need to do this in two phases
+	
+	// a) First, decrypt the client's message
+	decryptedBytes, err := crypto_utils.DecryptSK(authRequest.MessageEncrypted, sharedKey)
+	if err != nil {
+		response.Status = FAIL
+		return
+	}
+	
+	// b) Parse the encrypted content to get the client verification key
+	var encryptedContent AuthEncryptedContent
+	if err := json.Unmarshal(decryptedBytes, &encryptedContent); err != nil {
+		response.Status = FAIL
+		return
+	}
+	
+	// c) Parse the inner message to get the client verification key
+	var innerClientMessage InnerAuthMessage
+	if err := json.Unmarshal(encryptedContent.InnerMessage, &innerClientMessage); err != nil {
+		response.Status = FAIL
+		return
+	}
+	
+	// d) Parse the client verification key
+	clientVerificationKey, err := crypto_utils.BytesToPublicKey(innerClientMessage.VerificationKey)
+	if err != nil {
+		response.Status = FAIL
+		return
+	}
+	
+	// e) Now verify the signature
+	validSignature := crypto_utils.Verify(
+		encryptedContent.Signature,
+		crypto_utils.Hash(encryptedContent.InnerMessage),
+		clientVerificationKey,
+	)
+	
+	if !validSignature {
+		response.Status = FAIL
+		return
+	}
+	
+	// f) Verify time of day (freshness)
+	messageTOD := crypto_utils.BytesToTod(innerClientMessage.TimeOfDay)
+	currentTOD := crypto_utils.ReadClock()
+
+	bindingData, exists := BindingTable[innerClientMessage.Uid]
+	if exists {
+		recentLoginTime := bindingData.RecentLoginTime
+		
+		// Message time should be after login time and before current time
+		if !(recentLoginTime.Before(messageTOD) && messageTOD.Before(currentTOD)) {
+			response.Status = FAIL
+			return
+		}
+	}
+
+	// For new users (first login), we only check that the message time is before current time
+	if !exists && !messageTOD.Before(currentTOD) {
+		response.Status = FAIL
+		return
+	}
+	
+	// g) Check if nonce has been seen before
+	if !auth_utils.CheckAndRecordAuthNonce(innerClientMessage.Nonce) {
+		response.Status = FAIL
+		return
+	}
+	
+	// h) Verify the client's name matches
+	if innerClientMessage.Name != clientName {
+		response.Status = FAIL
+		return
+	}
+	
+	// 3. Create server's auth message
+	serverAuthContentBytes, err := auth_utils.CreateAuthMessage(
+		name,
+		innerClientMessage.Uid,
+		string(rune(LOGIN)),
+		crypto_utils.PublicKeyToBytes(publicKey),
+		privateKey,
+	)
+	
+	if err != nil {
+		response.Status = FAIL
+		return
+	}
+	
+	// 4. Encrypt the server's auth content with shared key
+	encryptedServerAuthBytes := auth_utils.EncryptAuthMessage(serverAuthContentBytes, sharedKey)
+	
+	// 5. Create auth response
+	*authResponse = AuthResponse{
+		MessageEncrypted: encryptedServerAuthBytes,
+	}
+	
+	// 6. Update session state
+	session.Active = true
+	session.SharedKey = sharedKey
+	session.UserID = innerClientMessage.Uid
+	session.VerificationKey = clientVerificationKey
+	
+	// 7. Update binding table
+	BindingTable[session.UserID] = BindingTableData{
+		ClientVerificationKey: clientVerificationKey,
+		RecentLoginTime:       crypto_utils.ReadClock(),
+	}
+	
+	// 8. Update response status
+	response.Status = OK
+	response.Uid = session.UserID
 }
 
 // Regular operation handler
@@ -235,89 +362,6 @@ func doCopy(request *Request, response *Response) {
 			response.Status = OK
 		}
 	}
-}
-
-// Process authentication-based login request
-func processAuthLogin(authRequest *AuthRequest, clientName string, response *Response, authResponse *AuthResponse) {
-	response.Status = FAIL
-	
-	if session.Active {
-		// Someone is already logged in
-		return
-	}
-	
-	// 1. Decrypt shared key
-	sharedKey, err := crypto_utils.DecryptPK(authRequest.SharedKeyEncrypted, privateKey)
-	if err != nil {
-		fmt.Println("Failed to decrypt shared key:", err)
-		return
-	}
-	
-	// 2. Decrypt client message
-	decryptedBytes, err := crypto_utils.DecryptSK(authRequest.MessageEncrypted, sharedKey)
-	if err != nil {
-		fmt.Println("Failed to decrypt client message:", err)
-		return
-	}
-	
-	// 3. Parse client auth message
-	var clientAuthMessage AuthMessage
-	if err := json.Unmarshal(decryptedBytes, &clientAuthMessage); err != nil {
-		fmt.Println("Failed to unmarshal client auth message:", err)
-		return
-	}
-	
-	// 4. Verify client auth message
-	valid, err, clientVerificationKey := auth_utils.VerifyAuthMessage(clientAuthMessage, clientName, "")
-	
-	if err != nil {
-		fmt.Println("Error verifying client message:", err)
-		return
-	}
-	
-	if !valid {
-		fmt.Println("Client verification failed")
-		return
-	}
-	
-	// 5. Create server's auth message
-	opString := string(rune(LOGIN))
-	serverAuthMessage := auth_utils.CreateAuthMessage(
-		name,
-		clientAuthMessage.Uid,
-		opString,
-		crypto_utils.PublicKeyToBytes(publicKey),
-		privateKey,
-	)
-	
-	// 6. Marshal and encrypt server auth message
-	serverAuthMessageBytes, err := json.Marshal(serverAuthMessage)
-	if err != nil {
-		fmt.Println("Failed to marshal server auth message:", err)
-		return
-	}
-	
-	// 7. Create auth response
-	*authResponse = AuthResponse{
-		MessageEncrypted: crypto_utils.EncryptSK(serverAuthMessageBytes, sharedKey),
-	}
-	
-	// 8. Update session state
-	session.Active = true
-	session.SharedKey = sharedKey
-	session.UserID = clientAuthMessage.Uid
-	session.VerificationKey = clientVerificationKey
-	session.PeerName = clientName
-	
-	// 9. Update binding table
-	BindingTable[session.UserID] = BindingTableData{
-		ClientVerificationKey: clientVerificationKey,
-		RecentLoginTime:       crypto_utils.ReadClock(),
-	}
-	
-	// 10. Update response status
-	response.Status = OK
-	response.Uid = session.UserID
 }
 
 // When the session is active allow logout

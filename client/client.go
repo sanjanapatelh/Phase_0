@@ -3,7 +3,6 @@ package client
 import (
 	"crypto/rsa"
 	"encoding/json"
-	"fmt"
 	"os"
 	"strings"
 
@@ -28,10 +27,7 @@ func init() {
 	Responses = make(chan NetworkData)
 	
 	// Initialize session data
-	session = &auth_utils.SessionData{
-		Active:    false,
-		Name:      name,
-	}
+	session = auth_utils.InitSessionData(name, nil)
 }
 
 func ObtainServerPublicKey() {
@@ -46,11 +42,13 @@ func ObtainServerPublicKey() {
 }
 
 func ProcessOp(request *Request) *Response {
-	response := &Response{Status: FAIL}
+	response := &Response{Status: FAIL, Uid: session.UserID}
 	if validateRequest(request) {
 		switch request.Op {
 		case LOGIN:
-			doLogin(request, response)
+			if !session.Active{
+				doLogin(request, response)
+			}
 		case LOGOUT, CREATE, DELETE, READ, WRITE, COPY:
 			if session.Active {
 				doSecureOp(request, response)
@@ -82,14 +80,9 @@ func validateRequest(r *Request) bool {
 
 func doLogin(request *Request, response *Response) {
 	// 1. Generate and encrypt shared key using server's public key
-	if session.Active == true {
-		response.Status = FAIL
-		response.Uid = session.UserID
-		return
-	}
 	sharedKey := crypto_utils.NewSessionKey()
 	if sharedKey == nil {
-		fmt.Println("Failed to generate session key")
+		response.Status = FAIL
 		return
 	}
 	sharedKeyEncrypted := crypto_utils.EncryptPK(sharedKey, serverPublicKey)
@@ -98,33 +91,34 @@ func doLogin(request *Request, response *Response) {
 	clientSigningKey := crypto_utils.NewPrivateKey()
 	clientVerificationKey := crypto_utils.PublicKeyToBytes(&clientSigningKey.PublicKey)
 
-	// 3. Create the authentication message using our auth utility
+	// 3. Create the authentication message
 	opString := string(rune(request.Op))
-	authMessage := auth_utils.CreateAuthMessage(
+	authContentBytes, err := auth_utils.CreateAuthMessage(
 		name, 
 		request.Uid, 
 		opString, 
 		clientVerificationKey, 
 		clientSigningKey,
 	)
-
-	// 4. Marshal and encrypt the auth message
-	authMessageBytes, err := json.Marshal(authMessage)
+	
 	if err != nil {
-		fmt.Println("Failed to marshal auth message:", err)
+		response.Status = FAIL
 		return
 	}
+	
+	// 4. Encrypt the auth content with shared key
+	encryptedAuthBytes := auth_utils.EncryptAuthMessage(authContentBytes, sharedKey)
 	
 	// 5. Create the auth request to send to server
 	authRequest := AuthRequest{
 		SharedKeyEncrypted: sharedKeyEncrypted,
-		MessageEncrypted:   crypto_utils.EncryptSK(authMessageBytes, sharedKey),
+		MessageEncrypted:   encryptedAuthBytes,
 	}
 
 	// 6. Marshal the auth request
 	authRequestBytes, err := json.Marshal(authRequest)
 	if err != nil {
-		fmt.Println("Failed to marshal auth request:", err)
+		response.Status = FAIL
 		return
 	}
 
@@ -134,41 +128,45 @@ func doLogin(request *Request, response *Response) {
 	// 8. Parse auth response
 	var authResponse AuthResponse
 	if err := json.Unmarshal(networkData.Payload, &authResponse); err != nil {
-		fmt.Println("Failed to unmarshal auth response:", err)
+		response.Status = FAIL
+		return
+	}
+	
+	// 9. Verify server public key
+	serverVerificationKey, err := crypto_utils.BytesToPublicKey(crypto_utils.PublicKeyToBytes(serverPublicKey))
+	if err != nil {
 		response.Status = FAIL
 		return
 	}
 
-	// 9. Decrypt the response
-	decryptedBytes, err := crypto_utils.DecryptSK(authResponse.MessageEncrypted, sharedKey)
-	if err != nil {
-		fmt.Println("Failed to decrypt server message:", err)
-		response.Status = FAIL
-		return
-	}
-	
-	// 10. Parse server auth message
-	var serverAuthMessage AuthMessage
-	if err := json.Unmarshal(decryptedBytes, &serverAuthMessage); err != nil {
-		fmt.Println("Failed to unmarshal server auth message:", err)
-		response.Status = FAIL
-		return
-	}
-
-	// 11. Verify server's identity and signature
-	valid, err, serverVerificationKey := auth_utils.VerifyAuthMessage(serverAuthMessage, "", request.Uid)
+	// 10. Verify and decrypt the server's response
+	innerServerMessage, valid, err := auth_utils.VerifyAndDecryptAuthMessage(
+		authResponse.MessageEncrypted,
+		sharedKey,
+		serverVerificationKey,
+		"",
+		request.Uid,
+	)
 	
 	if err != nil {
-		fmt.Println("Error verifying server message:", err)
 		response.Status = FAIL
 		return
 	}
 	
-	// 12. Check server name matches
-	namesMatch := strings.EqualFold(serverAuthMessage.Name, networkData.Name)
+	if !valid {
+		response.Status = FAIL
+		return
+	}
 	
-	if !valid || !namesMatch {
-		fmt.Println("Server verification failed")
+	// 11. Check server name matches
+	if !strings.EqualFold(innerServerMessage.Name, networkData.Name) {
+		response.Status = FAIL
+		return
+	}
+	
+	// 12. Parse server verification key from inner message
+	serverVerificationKey, err = crypto_utils.BytesToPublicKey(innerServerMessage.VerificationKey)
+	if err != nil {
 		response.Status = FAIL
 		return
 	}
@@ -179,7 +177,6 @@ func doLogin(request *Request, response *Response) {
 	session.SigningKey = clientSigningKey
 	session.VerificationKey = serverVerificationKey
 	session.UserID = request.Uid
-	session.PeerName = serverAuthMessage.Name
 	
 	// Login successful
 	response.Status = OK
@@ -188,42 +185,37 @@ func doLogin(request *Request, response *Response) {
 
 func doSecureOp(request *Request, response *Response) {
 	// 1. Create secure request
-	secureRequest, err := auth_utils.EncryptRequest(request, session)
+	secureMessage, err := auth_utils.EncryptRequest(request, session)
 	if err != nil {
-		fmt.Println("Failed to encrypt request:", err)
 		response.Status = FAIL
 		return
 	}
 	
-	// 2. Marshal secure request
-	secureRequestBytes, err := json.Marshal(secureRequest)
+	// 2. Marshal secure message
+	secureMessageBytes, err := json.Marshal(secureMessage)
 	if err != nil {
-		fmt.Println("Failed to marshal secure request:", err)
 		response.Status = FAIL
 		return
 	}
 	
-	// 3. Send secure request and receive secure response
-	networkData := sendAndReceive(NetworkData{Payload: secureRequestBytes, Name: name})
+	// 3. Send secure message and receive secure response
+	networkData := sendAndReceive(NetworkData{Payload: secureMessageBytes, Name: name})
 	
 	// 4. Parse secure response
-	var secureResponse SecureResponse
-	if err := json.Unmarshal(networkData.Payload, &secureResponse); err != nil {
-		fmt.Println("Failed to unmarshal secure response:", err)
+	var secureResponseMessage SecureMessage
+	if err := json.Unmarshal(networkData.Payload, &secureResponseMessage); err != nil {
 		response.Status = FAIL
 		return
 	}
 	
 	// 5. Decrypt and verify secure response
-	decryptedResponse, valid, err := auth_utils.DecryptResponse(&secureResponse, session)
+	decryptedResponse, valid, err := auth_utils.DecryptResponse(&secureResponseMessage, session)
 	if err != nil {
-		fmt.Println("Failed to decrypt response:", err)
 		response.Status = FAIL
 		return
 	}
 	
 	if !valid {
-		fmt.Println("Response verification failed")
 		response.Status = FAIL
 		return
 	}
@@ -238,6 +230,10 @@ func doSecureOp(request *Request, response *Response) {
 		session.Active = false
 		session.SharedKey = nil
 		session.UserID = ""
+		// Clear nonce map on logout
+		if session.SeenNonces != nil {
+			session.SeenNonces = make(map[string]bool)
+		}
 	}
 }
 
