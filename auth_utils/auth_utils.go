@@ -102,7 +102,7 @@ func EncryptRequest(request *Request, session *SessionData) (*SecureRequest, err
 	// Create signature (Hash(encrypted_request + time_of_day))
 	signingMessage := append(encryptedRequest, timeOfDay...)
 	signature := crypto_utils.Sign(
-		crypto_utils.Hash(signingMessage),
+		signingMessage,
 		session.SigningKey,
 	)
 	
@@ -180,7 +180,7 @@ func EncryptResponse(response *Response, session *SessionData) (*SecureResponse,
 	// Create signature (Hash(encrypted_response + time_of_day))
 	signingMessage := append(encryptedResponse, timeOfDay...)
 	signature := crypto_utils.Sign(
-		crypto_utils.Hash(signingMessage),
+		signingMessage,
 		session.SigningKey,
 	)
 	

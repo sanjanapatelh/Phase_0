@@ -82,6 +82,10 @@ func validateRequest(r *Request) bool {
 
 func doLogin(request *Request, response *Response) {
 	// 1. Generate and encrypt shared key using server's public key
+	if session.Active == true {
+		response.Status = FAIL
+		return
+	}
 	sharedKey := crypto_utils.NewSessionKey()
 	if sharedKey == nil {
 		fmt.Println("Failed to generate session key")
