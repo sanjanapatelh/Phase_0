@@ -297,6 +297,10 @@ func doOp(request *Request, response *Response) {
 			doCopy(request, response)
 		case LOGOUT:
 			doLogout(request, response)
+		case REGISTER:
+			doRegister(request, response)
+		case CHANGE_PASS:
+			doChangePass(request, response)
 		default:
 			// struct already default initialized to FAIL status
 		}
@@ -376,4 +380,14 @@ func doLogout(request *Request, response *Response) {
 			BindingTable[session.UserID] = data
 		}
 	}
+}
+
+func doRegister(request *Request, response *Response){
+	// do register 
+	// store in binding table password 
+	// return FAIL if already exists in table
+}
+
+func doChangePass(request *Request, response *Response){
+	
 }

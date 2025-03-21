@@ -49,10 +49,12 @@ func ProcessOp(request *Request) *Response {
 			if !session.Active{
 				doLogin(request, response)
 			}
-		case LOGOUT, CREATE, DELETE, READ, WRITE, COPY:
+		case LOGOUT, CREATE, DELETE, READ, WRITE, COPY, CHANGE_PASS:
 			if session.Active {
 				doSecureOp(request, response)
 			}
+		case REGISTER:
+			doRegister(request, response)
 		default:
 			// struct already default initialized to FAIL status
 		}
@@ -181,6 +183,10 @@ func doLogin(request *Request, response *Response) {
 	// Login successful
 	response.Status = OK
 	response.Uid = request.Uid
+}
+
+func doRegister(request *Request, response *Response){
+	// to do register encryption and send to server
 }
 
 func doSecureOp(request *Request, response *Response) {

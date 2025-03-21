@@ -11,6 +11,8 @@ const (
 	COPY
 	LOGIN
 	LOGOUT
+	REGISTER
+	CHANGE_PASS
 )
 
 type Request struct {
@@ -20,4 +22,7 @@ type Request struct {
 	Src_key string      `json:"src_key"`
 	Dst_key string      `json:"dst_key"`
 	Uid     string      `json:"uid"`
+	Pass 	string 		`json:"pass"`
+	Old_pass string		`json:"old_pass"`
+	New_pass string 	`json:"new_pass"`
 }
