@@ -1,0 +1,32 @@
+// Test Suite for UID Handling in REGISTER and LOGIN responses
+
+// 1. Test REGISTER response UID
+// The UID in response should match request UID regardless of success/failure
+{"key":"","val":null,"op":"REGISTER","src_key":"","dst_key":"","uid":"test_user1","pass":"password123","old_pass":"","new_pass":""}
+// Should succeed, response should have uid=test_user1
+
+{"key":"","val":null,"op":"REGISTER","src_key":"","dst_key":"","uid":"test_user1","pass":"different_password","old_pass":"","new_pass":""}
+// Should fail (duplicate user), but response should still have uid=test_user1
+
+{"key":"","val":null,"op":"REGISTER","src_key":"","dst_key":"","uid":"test_user2","pass":"password456","old_pass":"","new_pass":""}
+// Should succeed, response should have uid=test_user2
+
+// 2. Test LOGIN response UID (with no active session)
+// The UID in response should match request UID when LOGIN fails and no session is active
+{"key":"","val":null,"op":"LOGIN","src_key":"","dst_key":"","uid":"nonexistent_user","pass":"anypassword","old_pass":"","new_pass":""}
+// Should fail (user doesn't exist), but response should have uid=nonexistent_user
+
+{"key":"","val":null,"op":"LOGIN","src_key":"","dst_key":"","uid":"test_user1","pass":"wrong_password","old_pass":"","new_pass":""}
+// Should fail (wrong password), but response should have uid=test_user1
+
+// 3. Verify correct UID after successful login
+{"key":"","val":null,"op":"LOGIN","src_key":"","dst_key":"","uid":"test_user1","pass":"password123","old_pass":"","new_pass":""}
+// Should succeed, response should have uid=test_user1
+
+// 4. Verify UID after logout
+{"key":"","val":null,"op":"LOGOUT","src_key":"","dst_key":"","uid":"","old_pass":"","new_pass":""}
+// Should succeed, response should have uid=test_user1 (the previously logged in user)
+
+// 5. Test again after logout
+{"key":"","val":null,"op":"LOGIN","src_key":"","dst_key":"","uid":"test_user2","pass":"wrong_password","old_pass":"","new_pass":""}
+// Should fail (wrong password), but response should have uid=test_user2

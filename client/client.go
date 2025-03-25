@@ -219,6 +219,10 @@ func doLogin(request *Request, response *Response) {
 
 func doRegister(request *Request, response *Response) {
 	// 1. Generate and encrypt shared key using server's public key
+	if session.Active {
+		response.Status = FAIL
+		return
+	}
 	sharedKey := crypto_utils.NewSessionKey()
 	if sharedKey == nil {
 		response.Status = FAIL

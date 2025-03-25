@@ -532,7 +532,10 @@ func doRegister(request *Request, response *Response) {
 		response.Status = FAIL
 		return
 	}
-
+	if session.Active {
+		response.Status = FAIL
+		return
+	}
 	// 2. Generate random salt
 	salt := crypto_utils.GenerateRandomBytes(32)
 
