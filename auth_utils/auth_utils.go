@@ -3,9 +3,9 @@ package auth_utils
 import (
 	"crypto/rsa"
 	"encoding/json"
+	"encoding/hex"
 	"errors"
 	"fmt"
-
 	"crypto_utils"
 	. "types"
 )
@@ -68,100 +68,120 @@ func CheckAndRecordAuthNonce(nonce []byte) bool {
 	return true // Nonce is new
 }
 
+
 // CreateAuthMessage builds a properly structured authentication message
 func CreateAuthMessage(name string, uid string, op string, verificationKey []byte, signingKey *rsa.PrivateKey) ([]byte, error) {
-	// Create time of day
-	currentTOD := crypto_utils.ReadClock()
-	timeOfDay := crypto_utils.TodToBytes(currentTOD)
-	
-	// Generate nonce
-	nonce := crypto_utils.RandomBytes(4)
-	
-	// Create the inner auth message
-	innerAuthMessage := InnerAuthMessage{
-		Name:            name,
-		Uid:             uid,
-		Op:              op,
-		VerificationKey: verificationKey,
-		TimeOfDay:       timeOfDay,
-		Nonce:           nonce,
-	}
-	
-	// Serialize the inner message
-	innerMessageBytes, err := json.Marshal(innerAuthMessage)
-	if err != nil {
-		return nil, err
-	}
-	
-	// Sign the serialized inner message
-	signature := crypto_utils.Sign(innerMessageBytes, signingKey)
-	
-	// Create the encrypted content
-	authEncryptedContent := AuthEncryptedContent{
-		InnerMessage: innerMessageBytes,
-		Signature:    signature,
-	}
-	
-	// Serialize the encrypted content
-	return json.Marshal(authEncryptedContent)
-}
-
-// EncryptAuthMessage encrypts an auth message with the provided shared key
-func EncryptAuthMessage(contentBytes []byte, sharedKey []byte) []byte {
-	return crypto_utils.EncryptSK(contentBytes, sharedKey)
+    // Create time of day
+    currentTOD := crypto_utils.ReadClock()
+    timeOfDay := crypto_utils.TodToBytes(currentTOD)
+    
+    // Generate nonce
+    nonceBytes := crypto_utils.RandomBytes(4)
+    // Convert nonce to string for the struct
+    nonceStr := fmt.Sprintf("%x", nonceBytes)
+    
+    // Create the inner auth message
+    innerAuthMessage := InnerAuthMessage{
+        Name:            name,
+        Uid:             uid,
+        Op:       op,  // Changed from Op to Operation to match struct definition
+        VerificationKey: verificationKey,
+        TimeOfDay:       timeOfDay,
+        Nonce:           nonceStr,  // Using string version of nonce
+    }
+    
+    // Serialize the inner message
+    innerMessageBytes, err := json.Marshal(innerAuthMessage)
+    if err != nil {
+        return nil, err
+    }
+    
+    // Sign the serialized inner message
+    signature := crypto_utils.Sign(innerMessageBytes, signingKey)
+    
+    // Create the encrypted content
+    authEncryptedContent := AuthEncryptedContent{
+        InnerMessage: innerMessageBytes,
+        Signature:    signature,
+    }
+    
+    // Serialize the encrypted content
+    return json.Marshal(authEncryptedContent)
 }
 
 // VerifyAndDecryptAuthMessage verifies and extracts an auth message
 func VerifyAndDecryptAuthMessage(encryptedBytes []byte, sharedKey []byte, verificationKey *rsa.PublicKey, 
-	expectedName string, expectedUID string) (*InnerAuthMessage, bool, error) {
-	
-	// Decrypt the message
-	decryptedBytes, err := crypto_utils.DecryptSK(encryptedBytes, sharedKey)
-	if err != nil {
-		return nil, false, err
-	}
-	
-	// Unmarshal the encrypted content
-	var encryptedContent AuthEncryptedContent
-	if err := json.Unmarshal(decryptedBytes, &encryptedContent); err != nil {
-		return nil, false, err
-	}
-	
-	// Verify signature
-	validSignature := crypto_utils.Verify(
-		encryptedContent.Signature,
-		crypto_utils.Hash(encryptedContent.InnerMessage),
-		verificationKey,
-	)
-	
-	if !validSignature {
-		return nil, false, errors.New("invalid signature")
-	}
-	
-	// Unmarshal the inner message
-	var innerMessage InnerAuthMessage
-	if err := json.Unmarshal(encryptedContent.InnerMessage, &innerMessage); err != nil {
-		return nil, false, err
-	}
-	
-	// Verify name if provided
-	validName := innerMessage.Name == expectedName || expectedName == ""
-	if !validName {
-		return nil, false, errors.New("name mismatch")
-	}
-	
-	// Verify uid if provided
-	validUID := innerMessage.Uid == expectedUID || expectedUID == ""
-	if !validUID {
-		return nil, false, errors.New("uid mismatch")
-	}
-	
-	// Check if nonce has been seen before
-	if !CheckAndRecordAuthNonce(innerMessage.Nonce) {
-		return nil, false, errors.New("replay attack detected: repeated nonce")
-	}
-	
-	return &innerMessage, true, nil
+    expectedName string, expectedUID string) (*InnerAuthMessage, bool, error) {
+    
+    // Add validation to prevent panic
+    if len(encryptedBytes) < 12 {
+        return nil, false, errors.New("encrypted bytes too short or empty")
+    }
+    
+    // Decrypt the message
+    decryptedBytes, err := crypto_utils.DecryptSK(encryptedBytes, sharedKey)
+    if err != nil {
+        return nil, false, err
+    }
+    
+    // Unmarshal the encrypted content
+    var encryptedContent AuthEncryptedContent
+    if err := json.Unmarshal(decryptedBytes, &encryptedContent); err != nil {
+        return nil, false, err
+    }
+    
+    // Verify signature
+    validSignature := crypto_utils.Verify(
+        encryptedContent.Signature,
+        crypto_utils.Hash(encryptedContent.InnerMessage),
+        verificationKey,
+    )
+    
+    if !validSignature {
+        return nil, false, errors.New("invalid signature")
+    }
+    
+    // Unmarshal the inner message
+    var innerMessage InnerAuthMessage
+    if err := json.Unmarshal(encryptedContent.InnerMessage, &innerMessage); err != nil {
+        return nil, false, err
+    }
+    
+    // Verify name if provided
+    validName := innerMessage.Name == expectedName || expectedName == ""
+    if !validName {
+        return nil, false, errors.New("name mismatch")
+    }
+    
+    // Verify uid if provided
+    validUID := innerMessage.Uid == expectedUID || expectedUID == ""
+    if !validUID {
+        return nil, false, errors.New("uid mismatch")
+    }
+    
+    // Convert string nonce to bytes for CheckAndRecordAuthNonce
+    // We need to convert from hex string back to bytes
+    nonceBytes, err := hex.DecodeString(innerMessage.Nonce)
+    if err != nil {
+        return nil, false, errors.New("invalid nonce format")
+    }
+    
+    // Check if nonce has been seen before
+    if !CheckAndRecordAuthNonce(nonceBytes) {
+        return nil, false, errors.New("replay attack detected: repeated nonce")
+    }
+    
+    return &innerMessage, true, nil
+}
+
+// EncryptAuthMessage encrypts an auth message with the provided shared key
+func EncryptAuthMessage(contentBytes []byte, sharedKey []byte) []byte {
+	// Add validation to prevent errors
+    if len(contentBytes) == 0 || len(sharedKey) == 0 {
+        return nil // Return nil instead of trying to encrypt empty data
+    }
+    
+    return crypto_utils.EncryptSK(contentBytes, sharedKey)
 }
 
 // EncryptRequest securely encrypts a request

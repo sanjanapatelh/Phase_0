@@ -7,12 +7,14 @@ import (
 
 // InnerAuthMessage is the inner structure containing all authentication data
 type InnerAuthMessage struct {
-	Name            string `json:"name"`
-	Uid             string `json:"uid"`
-	Op              string `json:"op"`
-	VerificationKey []byte `json:"verification_key"`
-	TimeOfDay       []byte `json:"time_of_day"`
-	Nonce           []byte `json:"nonce"`
+    Name           string `json:"name"`
+    Uid            string `json:"uid"`
+    Op     string `json:"operation"`
+    TimeOfDay      []byte `json:"timeOfDay"`
+    VerificationKey []byte `json:"verificationKey"`
+    Nonce          string `json:"nonce"`
+    Password       string `json:"password"` // Make sure this is properly defined
+    Status         string `json:"status,omitempty"`
 }
 
 // AuthEncryptedContent contains the inner message and its signature
@@ -35,4 +37,7 @@ type AuthResponse struct {
 type BindingTableData struct {
 	ClientVerificationKey *rsa.PublicKey
 	RecentLoginTime       time.Time
+	PasswordHash          []byte
+	Salt                  []byte 
 }
+

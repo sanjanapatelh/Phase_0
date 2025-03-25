@@ -1,0 +1,60 @@
+
+
+## User Registration and Authentication
+1. **User Registration**
+   - Successfully registered user "gs" with password "password123"
+   - Successfully registered user "fbs" with password "securepwd456"
+   - Correctly rejected attempt to register "gs" again with a different password
+
+2. **Login Authentication**
+   - Successful login with correct credentials for both users
+   - Failed login with incorrect passwords
+   - Failed login attempts while another user is already logged in (session enforcement)
+
+3. **Password Management**
+   - Failed password change attempts with incorrect old password
+   - Failed attempts to change another user's password
+   - Login attempts with supposed new passwords that were never actually changed failed correctly
+
+## Session Management
+1. **Session Enforcement**
+   - Operations without active sessions correctly failed
+   - Only one active session was allowed at a time
+   - Login for a second user failed while first user was still logged in
+
+2. **Logout Behavior**
+   - Successful logout cleared active sessions
+   - Logout without an active session correctly failed
+
+## Key-Value Store Operations
+1. **CREATE Operations**
+   - CREATE failed without login
+   - Successfully created keys when logged in
+   - Failed to create keys that already exist
+
+2. **READ Operations**
+   - READ failed without login
+   - Successfully read existing keys
+   - Failed to read non-existent keys
+
+3. **WRITE Operations**
+   - Successfully modified existing keys
+   - Failed to write to non-existent keys
+
+4. **DELETE Operations**
+   - Successfully deleted existing keys
+   - Failed to delete non-existent keys
+   - Case-sensitivity was properly enforced in key names
+
+5. **COPY Operations**
+   - Failed when either source or destination didn't exist
+   - Successfully copied between existing keys
+   - Case-sensitivity was properly enforced
+
+## Protocol Security Features
+1. **Replay Attack Prevention**
+   - The nonce handling appears to be working correctly as there are no successful replay attacks in the tests
+
+2. **Authentication Integrity**
+   - Failed authentication attempts didn't compromise existing sessions
+   - Failed operations didn't alter the state unexpectedly

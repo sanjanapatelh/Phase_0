@@ -175,3 +175,45 @@ func BytesToTod(t []byte) time.Time {
 	}
 	return tod
 }
+
+// work_factor determines the number of iterations (higher = more secure but slower)
+func HashWithSalt(password string, salt []byte) []byte {
+	// Combine password and salt
+	input := append([]byte(password), salt...)
+	
+	// Initial hash
+	hash := sha256.Sum256(input)
+	hashBytes := hash[:]
+	
+	// Perform multiple iterations to simulate work factor
+	// 10,000 iterations as in the previous implementation
+	for i := 0; i < 10000; i++ {
+		hash := sha256.Sum256(append(hashBytes, input...))
+		hashBytes = hash[:]
+	}
+	
+	return hashBytes
+}
+
+// CompareHashes performs a constant-time comparison of two hash byte slices
+func CompareHashes(hash1, hash2 []byte) bool {
+	if len(hash1) != len(hash2) {
+		return false
+	}
+	
+	result := 0
+	for i := 0; i < len(hash1); i++ {
+		result |= int(hash1[i] ^ hash2[i])
+	}
+	return result == 0
+}
+
+// GenerateRandomBytes generates cryptographically secure random bytes
+func GenerateRandomBytes(length int) []byte {
+	b := make([]byte, length)
+	_, err := rand.Read(b)
+	if err != nil {
+		panic(err)
+	}
+	return b
+}
