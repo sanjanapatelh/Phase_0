@@ -1,57 +1,79 @@
-Updated Protocol :
+# Protocol Design Revisions
 
-C = Client 
-U = Uid 
-Kc = Client Public Key
-kc = Client Private Key
-Ks = Server Public Key 
-ks = Server Private Key
-Kcs = Session Key 
-n = nonce
+## Initial Design
+The initial protocol design used public-private key cryptography (asymmetric encryption):
 
-ToD = Time of Day
+1. **Client Initiates Registration Request:**
+   * Client creates message: m := C, U, Pwd, REGISTER, Kc, ToD
+   * Client generates signature: Sc := kc-sign(Hash(m))
+   * **C → S:** C, Ks-Enc{m, Sc}
 
-1. Client initiates connection request :
-    m := C , U , LOGIN , Kc , ToD
-    Sc(Signature of client) = kc - sign(m)
-    Client generates session key - Kcs 
+2. **Server Processes Registration Request:**
+   * Server decrypts message: m, Sc := ks-Dec{Ks-Enc{m, Sc}}
+   * Server verifies signature: Kc-verify(Hash(m), Sc)
+   * Server validates client name: C == m.C
+   * Server checks if user exists: if U ∉ BindingTable then continue else fail
+   * Server generates random salt: n := RandomBytes(32)
+   * Server computes password hash: p := Hash(Pwd · n, work_factor)
+   * Server stores in BindingTable: BindingTable[U] := {ClientVerificationKey: Kc, PasswordHash: p, Salt: n, RecentLoginTime: ToD}
 
-    C -> S : C , Ks-Enc{Kcs} , Kcs-Enc{m,Sc}
+3. **Server Sends Registration Response:**
+   * Server creates response: m' := S, m.U, REGISTER, Ks, status, ToD
+   * Server generates signature: Ss := ks-sign(Hash(m'))
+   * **S → C:** S, Ks-Enc{m', Ss}
 
-2. Server Validates the data :
-    a. Decrypts Session Key 
-        Kcs = ks-Dec{Ks-Enc{kcs}}
-    b. Extracts message and sign 
-        m , Sc = Kcs-Dec{ Kcs - Enc{ m, Sc } }
-    c. Server verifies the signature proceeds if succeeds. 
-    d. Validates client name
-        Checks whether the Client name inside message same as Client (  C == m.C )
-    e. Validates Time :
-        Server maintains Binding table which records Uid , recent login time , verification key of client
-        Validates : recent Login time < m.tod < current time .
-        If fails -> Abort . 
-    f. Sends Message back to Client ( success or failure )
-        Server Message if success :
-        m' := S , m.U , LOGIN , m.tod , Ks , OK 
-        Ss( sign' ) : = ks-sign(m')
+4. **Client Verifies Registration Response:**
+   * Client decrypts response: m', Ss := Ks-Dec{Ks-Enc{m', Ss}}
+   * Client verifies signature: Ks-verify(Hash(m'), Ss)
+   * Client validates server name: S == m'.S
+   * Client confirms status and completes registration process
 
-    S -> C : S , Kcs-Enc{ m' , Sign'}
+## Updated Design
+The updated protocol uses session keys (symmetric encryption) due to message size limitations in the RSA implementation:
 
-3. Client Verifies the message from server 
-    a. Client Decrypts using session key
-        m' , sign' = Kcs-Dec{  Kcs-Enc{ m' , Sign'} }
-    b. Client verifies signature ( Return if fails )
-    c. Validates server name ( S == m'.S )
-    d. Validates time : m'.tod < current time 
+1. **Client Initiates Registration Request:**
+   * Client creates message: m := C, U, Pwd, REGISTER, ToD, nonce
+   * Client encrypts using session key: SessionKey-Enc{m}
+   * **C → S:** C, SessionKey-Enc{m}
 
+2. **Server Processes Registration Request:**
+   * Server decrypts message: m := SessionKey-Dec{SessionKey-Enc{m}}
+   * Server validates nonce (prevents replay attacks)
+   * Server checks if user exists: if U ∉ BindingTable then continue else fail
+   * Server generates random salt: n := RandomBytes(32)
+   * Server computes password hash: p := Hash(Pwd · n, work_factor)
+   * Server stores in BindingTable: BindingTable[U] := {PasswordHash: p, Salt: n, RecentLoginTime: ToD}
 
+3. **Server Sends Registration Response:**
+   * Server creates response: m' := S, m.U, REGISTER, status, ToD, nonce'
+   * Server encrypts using session key: SessionKey-Enc{m'}
+   * **S → C:** S, SessionKey-Enc{m'}
 
+4. **Client Verifies Registration Response:**
+   * Client decrypts response: m' := SessionKey-Dec{SessionKey-Enc{m'}}
+   * Client validates nonce' (prevents replay attacks)
+   * Client confirms status and completes registration process
 
+## Key Changes
+1. **Encryption Method:**
+   * Changed from asymmetric (public-private key) to symmetric (session key) encryption
+   * Addressed RSA message size limitation issues
 
-Reasons for changes: 
-1. Included Digital signature which will insure integrity of the data. 
-2. Removed multiple nonce being used ,  Reduces computational overhead and simplifies implementation.
-3. Introduces Binding table which allows for better session management and tracking.
-4. Encapsulates all fields into a single signed and encrypted message.which Improves integrity.
-5. Previously Used asymmetric encryption for key exchange and symmetric for messages.
-   Changed to the session key (Kcs) for all encryption after key exchange.Which is Consistent, efficient, and secure.
+2. **Authentication:**
+   * Removed digital signatures (Sc, Ss)
+   * Implemented nonce-based replay attack prevention
+
+3. **Storage:**
+   * Removed ClientVerificationKey from BindingTable (no longer using public keys)
+   * Maintained password salt and hash mechanisms
+
+4. **Security Properties:**
+   * Both designs protect against replay attacks
+   * Both designs authenticate the parties involved
+   * Session key approach reduces computational overhead
+   * Session key approach enables larger message sizes
+
+5. **Implementation Simplification:**
+   * Reduced cryptographic operations
+   * Streamlined message processing
+   * Maintained security properties with less complex protocol
