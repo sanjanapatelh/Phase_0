@@ -1,131 +1,83 @@
-SECURITY PROPERTIES TESTED
+## User Registration and Authentication
+1. **User Registration**
+   - Successfully registered user "gs" with password "password123"
+   - Successfully registered user "fbs" with password "securepwd456"
+   - Correctly rejected attempt to register "gs" again with a different password
+   - REGISTER response correctly includes the requested UID regardless of success/failure
+   - When registering an existing user (duplicate), the response maintains the requested UID
 
-1. Replay Attack Resistance
+2. **Login Authentication**
+   - Successful login with correct credentials for both users
+   - Failed login with incorrect passwords
+   - Failed login attempts while another user is already logged in (session enforcement)
+   - LOGIN response correctly includes the requested UID when login fails and no session is active
+   - Failed login attempts (wrong password or nonexistent user) maintain the requested UID in response
 
-The network_simulator.go implementation tests the system's ability to detect and reject replayed messages. This verifies several critical security properties:
+3. **Password Management**
+   - Failed password change attempts with incorrect old password
+   - Failed attempts to change another user's password
+   - Login attempts with supposed new passwords that were never actually changed failed correctly
 
-- Nonce Uniqueness**: Each message should contain a unique nonce that is checked during verification
-- Session State Management: The system should maintain state about previously seen messages
-- Authentication Integrity: Authentication should fail if a previous auth message is replayed
+## Session Management
+1. **Session Enforcement**
+   - Operations without active sessions correctly failed
+   - Only one active session was allowed at a time
+   - Login for a second user failed while first user was still logged in
 
-2. Cryptographic Validation
+2. **Logout Behavior**
+   - Successful logout cleared active sessions
+   - Logout without an active session correctly failed
+   - LOGOUT response includes the UID of the previously logged-in user
 
-By replaying messages, we also test the cryptographic validation mechanisms:
+## Key-Value Store Operations
+1. **CREATE Operations**
+   - CREATE failed without login
+   - Successfully created keys when logged in
+   - Failed to create keys that already exist
 
-- Signature Verification: The system should verify digital signatures on all messages
-- Decryption Security: The decryption process should validate message integrity
-- Session Key Management*: Session keys should be properly managed for each session
+2. **READ Operations**
+   - READ failed without login
+   - Successfully read existing keys
+   - Failed to read non-existent keys
 
-3. Error Handling
+3. **WRITE Operations**
+   - Successfully modified existing keys
+   - Failed to write to non-existent keys
 
-The test also evaluates how the system handles invalid security conditions:
+4. **DELETE Operations**
+   - Successfully deleted existing keys
+   - Failed to delete non-existent keys
+   - Case-sensitivity was properly enforced in key names
 
-- Graceful Failure: Security violations should result in proper error handling, not crashes
-- Clear Error Reporting: The system should report security failures clearly
-- Denial of Replayed Operations: Replayed operations should be denied with appropriate status codes
+5. **COPY Operations**
+   - Failed when either source or destination didn't exist
+   - Successfully copied between existing keys
+   - Case-sensitivity was properly enforced
 
-Testing Approach
+## Protocol Security Features
+1. **Replay Attack Prevention**
+   - The nonce handling appears to be working correctly as there are no successful replay attacks in the tests
 
-The network.go implementation uses a simple yet effective approach to test replay attacks:
+2. **Authentication Integrity**
+   - Failed authentication attempts didn't compromise existing sessions
+   - Failed operations didn't alter the state unexpectedly
 
-1. It captures the first message (typically a LOGIN request)
-2. It forwards messages normally until it reaches the third message
-3. On the third message, it replays the first message instead
-4. It analyzes the system's response to determine if the attack was detected
+## UID Handling in Responses
+1. **REGISTER Response UID Handling**
+   - Response UID matches request UID for successful user registration
+   - Response UID matches request UID even when registration fails (duplicate user)
 
-This approach specifically tests what happens when a legitimate message is captured and replayed later in the conversation.
+2. **LOGIN Response UID Handling**
+   - Response UID matches request UID when login fails with nonexistent user
+   - Response UID matches request UID when login fails with incorrect password
+   - Response UID correctly reflects the logged-in user after successful login
 
-Expected Outcomes
+3. **UID Consistency Across Operations**
+   - After successful login, all operation responses maintain the logged-in user's UID
+   - After logout, the UID in the logout response correctly reflects the previously logged-in user
 
-A secure implementation should:
-
-1. Detect that the replayed message contains a nonce that has already been used
-2. Reject the replayed authentication attempt with a FAIL status or error
-3. Maintain the security of the session despite the attack attempt
-4. Not crash or enter an inconsistent state due to the attack
-
-Test Results Interpretation
-
-The testing code tries to determine the outcome by checking the response payload:
-
-- If the response contains "FAIL", the system successfully detected and rejected the replay
-- If the response contains "OK", the system failed to detect the replay (security issue)
-- If the system crashes with crypto-related errors, it likely detected the issue but needs better error handling
-
-DOLEV_YAO MODEL COVERAGE
-This test addresses a key aspect of the Dolev-Yao attack model, which assumes an attacker can:
-
-- Intercept any message on the network
-- Record messages for later use
-- Replay previously sent messages
-
-By testing replay attacks, we're validating that the system is resilient against one of the most common and practical network attacks in the Dolev-Yao model.
-
-
-KEY_VALUE STORE FUNCTIONALITY TESTING(same as phase 0)
-
-Part A :
-    (All the test cases are authorized and session is active , just tested for the functionality of COPY  )
-    Test Cases are in file Test/a1
-
-Test 1(a1) positive :
-    Case :  
-        1. Login with uid 1
-        2. Create key CS101 ,CS102, CS103 ( authorized )
-        3. Copy value of CS101 to CS103 ( authorized )
-    Output :
-        1. Able to login as the only session running 
-        2. Able to create 3 key as user has his session active.
-        3. Able to copy value as both the keys are created and values can be copied.
-    Explanation:
-        This is a positive case where all required elements are provided and with positive output.
-
-
-Test 2(a2) Negative : 
-    Case :  
-        1. Login with uid 1
-        2. Create key CS101 ,CS102 ( authorized )
-        3. Copy value of CS101 to CS103 ( authorized )
-    Output :
-        1. Able to login as the only session running 
-        2. Able to create 2 key .
-        3. Copy function fails as the dst_key not available.
-    Explanation:
-        Negative case where requested key not created.
-
-Test 3(a3) Negative : 
-    Case :  
-        1. Login with uid 1
-        2. Create key CS101 ,CS102 ( authorized )
-        3. Copy value of CS101 without mentioning dst_key -> any of the key dst_key/key is empty
-    Output :
-        1. Able to login as the only session running 
-        2. Able to create 2 key .
-        3. Copy function fails as the dst_key is empty.
-    Explanation:
-        The request fails when key/dst_key is not passed .
-
-Code changes Explanation: 
-    1. Added COPY operation and json key src_key , dst_key in request structure. 
-    2. When the copy operation is executed i have restricted the requests with empty value for ( source key and destination key ).
-
-
-
-Part B(b1): 
-    Code changes Explanation:
-        1. Request with empty UID fails 
-        2. When the session is already logged in any incoming request with any UID will be processed as the request sent by logged in user. 
-    
-    Case 1(key caseLogin):
-        Positive Case 
-        1. Login with uid 1 , session created and allows to create new records. 
-
-    Case 2(MultipleUser):
-        1. There is an active session which blocks other user from logging in. 
-        2. Once the session is logged out other user can login. 
-
-    Case 3(NoActiveSession):
-        1. User logged in and logged out. 
-        2. Hence there is no active session available which blocked all the operations. 
-        3. User trying to log out without a session fails.
-        
+## Testing Instructions
+To run the UID handling tests, use the following command:
+```
+./main -f test/p2
+```

@@ -10,6 +10,8 @@ import (
 	"crypto/x509"
 	"errors"
 	"time"
+
+	"golang.org/x/crypto/argon2"
 )
 
 func RandomBytes(size int) []byte {
@@ -174,4 +176,42 @@ func BytesToTod(t []byte) time.Time {
 		panic(err)
 	}
 	return tod
+}
+
+// work_factor determines the number of iterations (higher = more secure but slower)
+
+func HashWithSalt(password string, salt []byte) []byte {
+    // Argon2 parameters
+    time := uint32(1)         // Number of iterations
+    memory := uint32(64 * 1024) // Memory usage in KiB (64MB)
+    threads := uint8(4)       // Number of threads
+    keyLen := uint32(32)      // Length of the returned key
+    
+    // Use Argon2id which provides balanced protection against various attacks
+    return argon2.IDKey([]byte(password), salt, time, memory, threads, keyLen)
+}
+
+
+
+// CompareHashes performs a constant-time comparison of two hash byte slices
+func CompareHashes(hash1, hash2 []byte) bool {
+	if len(hash1) != len(hash2) {
+		return false
+	}
+	
+	result := 0
+	for i := 0; i < len(hash1); i++ {
+		result |= int(hash1[i] ^ hash2[i])
+	}
+	return result == 0
+}
+
+// GenerateRandomBytes generates cryptographically secure random bytes
+func GenerateRandomBytes(length int) []byte {
+	b := make([]byte, length)
+	_, err := rand.Read(b)
+	if err != nil {
+		panic(err)
+	}
+	return b
 }
