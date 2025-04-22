@@ -13,6 +13,8 @@ const (
 	LOGOUT
 	REGISTER
 	CHANGE_PASS
+	MODACL
+	REVACL
 )
 
 type Request struct {
@@ -25,4 +27,9 @@ type Request struct {
 	Pass 	string 		`json:"pass"`
 	Old_pass string		`json:"old_pass"`
 	New_pass string 	`json:"new_pass"`
+	Writers   []string `json:"writers"`
+    Readers   []string `json:"readers"`
+    Copytos   []string `json:"copytos"`
+    Copyfroms []string `json:"copyfroms"`
+    Indirects []string `json:"indirects"`
 }
