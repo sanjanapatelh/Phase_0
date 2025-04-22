@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"server"
 	"strings"
 
 	"github.com/google/uuid"
@@ -87,11 +86,6 @@ func validateRequest(r *Request) bool {
 }
 
 func doLogin(request *Request, response *Response) {
-	// unregistered users should not be able to login
-	if _, ok := server.BindingTable[request.Uid]; !ok {
-		response.Status = FAIL
-		return
-	}
 	// 1. Generate and encrypt shared key using server's public key
 	sharedKey := crypto_utils.NewSessionKey()
 	if sharedKey == nil {

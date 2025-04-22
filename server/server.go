@@ -166,8 +166,6 @@ func processSecureRequest(secureMessage *SecureMessage, responseBytes *[]byte) {
 	}
 }
 
-// In server.go, modify the processAuthLogin function
-
 func processAuthLogin(authRequest *AuthRequest, clientName string, response *Response, authResponse *AuthResponse) {
 	response.Status = FAIL
 
@@ -262,6 +260,9 @@ func processAuthLogin(authRequest *AuthRequest, clientName string, response *Res
 				return
 			}
 		}
+	} else {
+		response.Status = FAIL
+		return
 	}
 
 	// For new users (first login), we only check that the message time is before current time
