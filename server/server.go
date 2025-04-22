@@ -17,7 +17,7 @@ var privateKey *rsa.PrivateKey
 var publicKey *rsa.PublicKey
 
 var name string
-var kvstore map[string]interface{}
+var kvstore map[string]KeyValue
 var Requests chan NetworkData
 var Responses chan NetworkData
 
@@ -34,7 +34,7 @@ func init() {
 	}
 
 	name = uuid.NewString()
-	kvstore = make(map[string]interface{})
+	kvstore = make(map[string]KeyValue)
 	BindingTable = make(map[string]BindingTableData)
 	Requests = make(chan NetworkData)
 	Responses = make(chan NetworkData)
@@ -446,6 +446,10 @@ func doOp(request *Request, response *Response) {
 			doRegister(request, response)
 		case CHANGE_PASS:
 			doChangePass(request, response)
+		case MODACL:
+			doModAcl(request, response)
+		case REVACL:
+			doRevAcl(request, response)
 		default:
 			// struct already default initialized to FAIL status
 		}
@@ -465,8 +469,20 @@ func doCreate(request *Request, response *Response) {
 
 	// TODO: add code to save  access control sets
 	if _, ok := kvstore[request.Key]; !ok {
-		kvstore[request.Key] = request.Val
-		response.Status = OK
+		if _, ok := kvstore[request.Key]; ok {
+			keyValue := KeyValue{
+				Val:       request.Val,
+				Owner:     session.UserID,
+				Readers:   make(map[string]bool),
+				Writers:   make(map[string]bool),
+				Copyfroms: make(map[string]bool),
+				Copytos:   make(map[string]bool),
+				Indirects: make(map[string]bool),
+			}
+	
+			kvstore[request.Key] = keyValue
+			response.Status = OK
+		}
 	}
 }
 
@@ -475,7 +491,7 @@ func doCreate(request *Request, response *Response) {
 // action.
 func doDelete(request *Request, response *Response) {
 
-	// TODO: add condition to only allow principal who created key to delete it
+	// TODO: add condition to allow only k.owner to delete the key.
 	if _, ok := kvstore[request.Key]; ok {
 		delete(kvstore, request.Key)
 		response.Status = OK
@@ -488,7 +504,7 @@ func doDelete(request *Request, response *Response) {
 func doReadVal(request *Request, response *Response) {
 
 	// TODO: add condition to allow only people in k.readers set to perform this op
-	// calculate effective permission (indirection)
+	// check access_utils.isInReaderSet(session.Uid) then perform
 	if v, ok := kvstore[request.Key]; ok {
 		response.Val = v
 		response.Status = OK
@@ -502,11 +518,16 @@ func doReadVal(request *Request, response *Response) {
 func doWriteVal(request *Request, response *Response) {
 
 	// TODO: add condition to allow only people in k.writers set to perform this op
-	// calculate effective permission (indirection)
-	if _, ok := kvstore[request.Key]; ok {
-		kvstore[request.Key] = request.Val
-		response.Status = OK
-	}
+	// check access_utils.isInWriterSet(session.Uid) then perform
+	if existingKeyValue, ok := kvstore[request.Key]; ok {
+
+        updatedKeyValue := existingKeyValue
+
+        updatedKeyValue.Val = request.Val
+
+        kvstore[request.Key] = updatedKeyValue
+        response.Status = OK
+    }
 }
 
 // Copy function - copies the value from src_key to dst_key
@@ -516,7 +537,7 @@ func doCopy(request *Request, response *Response) {
 	// TODO: to perform this we need to check
 	// 1. person copying is present in k.copyfroms of src key
 	// 2. person copying is present in k.copytos of dst key
-	// calculate effective permission (indirection)
+	// check access_utils.isInCopyToSet(session.Uid) && access_utils.isInCopyFromSet(session.Uid)
 
 	// First check if source key exists
 	if srcVal, srcOk := kvstore[request.Src_key]; srcOk {
@@ -605,4 +626,16 @@ func doChangePass(request *Request, response *Response) {
 	// 4. Set response status
 	response.Status = OK
 	response.Uid = session.UserID
+}
+
+func doModAcl(request *Request, respone *Response){
+	// only allow owners to perform these operations
+	// if particular set is not passed dont do anything with that
+	// if [] is passed for some operation reset that particular op set to empty
+
+}
+
+func doRevAcl(request *Request, respone *Response){
+	// helps owner review all the persmissions of kv store
+	// returns unions of the direct access control sets and indirect sets
 }
