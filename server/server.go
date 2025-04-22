@@ -462,6 +462,8 @@ func doOp(request *Request, response *Response) {
 // Sets the value and metaval for key k in the
 // key-value store to value v and metavalue m.
 func doCreate(request *Request, response *Response) {
+
+	// TODO: add code to save  access control sets
 	if _, ok := kvstore[request.Key]; !ok {
 		kvstore[request.Key] = request.Val
 		response.Status = OK
@@ -472,6 +474,8 @@ func doCreate(request *Request, response *Response) {
 // key-value store. If key does not exist then take no
 // action.
 func doDelete(request *Request, response *Response) {
+
+	// TODO: add condition to only allow principal who created key to delete it
 	if _, ok := kvstore[request.Key]; ok {
 		delete(kvstore, request.Key)
 		response.Status = OK
@@ -482,6 +486,9 @@ func doDelete(request *Request, response *Response) {
 // associated with key. If key does not exist
 // then status is FAIL.
 func doReadVal(request *Request, response *Response) {
+
+	// TODO: add condition to allow only people in k.readers set to perform this op
+	// calculate effective permission (indirection)
 	if v, ok := kvstore[request.Key]; ok {
 		response.Val = v
 		response.Status = OK
@@ -493,6 +500,9 @@ func doReadVal(request *Request, response *Response) {
 // with key k to value v. If key does not exist
 // then status is FAIL.
 func doWriteVal(request *Request, response *Response) {
+
+	// TODO: add condition to allow only people in k.writers set to perform this op
+	// calculate effective permission (indirection)
 	if _, ok := kvstore[request.Key]; ok {
 		kvstore[request.Key] = request.Val
 		response.Status = OK
@@ -502,6 +512,12 @@ func doWriteVal(request *Request, response *Response) {
 // Copy function - copies the value from src_key to dst_key
 // Both keys must exist for the operation to succeed
 func doCopy(request *Request, response *Response) {
+
+	// TODO: to perform this we need to check
+	// 1. person copying is present in k.copyfroms of src key
+	// 2. person copying is present in k.copytos of dst key
+	// calculate effective permission (indirection)
+
 	// First check if source key exists
 	if srcVal, srcOk := kvstore[request.Src_key]; srcOk {
 		// Then check if destination key exists
