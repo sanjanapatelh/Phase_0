@@ -1,7 +1,0 @@
-{"key":"" , "val":"" ,  "op":"LOGIN" , "uid" : "1"}
-{"key":"CS101" , "val":"system security" ,  "op":"CREATE" , "uid" : "1"}
-{"key":"CS102" , "val":"cryptography" ,  "op":"CREATE" , "uid" : "1"}
-{"key":"CS101" ,"sct_key":"CS101", "dst_key":"CS103",  "op":"COPY" , "uid" : "1"}
-{"key":"CS101" ,  "op":"READ" , "uid" : "1" }
-{"key":"CS103" ,  "op":"READ" , "uid" : "1"}
-
