@@ -50,17 +50,12 @@ func ProcessOp(request *Request) *Response {
 			if !session.Active {
 				doLogin(request, response)
 			}
-		case LOGOUT, CREATE, DELETE, READ, WRITE, COPY, CHANGE_PASS:
-			fmt.Println(request.Op)
+		case LOGOUT, CREATE, DELETE, READ, WRITE, COPY, CHANGE_PASS, MODACL, REVACL:
 			if session.Active {
 				doSecureOp(request, response)
 			}
 		case REGISTER:
 			doRegister(request, response)
-		case MODACL, REVACL:
-			if session.Active {
-				doSecureOp(request, response)
-			}
 		default:
 			// struct already default initialized to FAIL status
 		}
@@ -69,7 +64,6 @@ func ProcessOp(request *Request) *Response {
 }
 
 func validateRequest(r *Request) bool {
-	fmt.Println(r.Op)
 	// Restrict request without UID
 	switch r.Op {
 	case CREATE, WRITE:
@@ -369,9 +363,7 @@ func doSecureOp(request *Request, response *Response) {
 	}
 
 	// 6. Copy response data
-	response.Status = decryptedResponse.Status
-	response.Val = decryptedResponse.Val
-	response.Uid = decryptedResponse.Uid
+	*response = *decryptedResponse
 
 	// 7. Handle logout specially - clear session if logout was successful
 	if request.Op == LOGOUT && response.Status == OK {

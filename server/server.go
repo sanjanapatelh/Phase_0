@@ -141,7 +141,6 @@ func processSecureRequest(secureMessage *SecureMessage, responseBytes *[]byte) {
 
 	// 2. Process the regular operation
 	doOp(request, &response)
-
 	// 3. Encrypt the response
 	secureResponseMessage, err = auth_utils.EncryptResponse(&response, session)
 	if err != nil {
@@ -467,26 +466,43 @@ func doOp(request *Request, response *Response) {
 // Sets the value and metaval for key k in the
 // key-value store to value v and metavalue m.
 func doCreate(request *Request, response *Response) {
-
-	// TODO: add code to save  access control sets
-	if _, ok := kvstore[request.Key]; !ok {
-		if _, ok := kvstore[request.Key]; ok {
-			keyValue := KeyValue{
-				Val:       request.Val,
-				Owner:     session.UserID,
-				Readers:   make(map[string]bool),
-				Writers:   make(map[string]bool),
-				Copyfroms: make(map[string]bool),
-				Copytos:   make(map[string]bool),
-				Indirects: make(map[string]bool),
-			}
-
-			keyValue.Writers[session.UserID] = true
-			kvstore[request.Key] = keyValue
-			access_utils.SaveAccessControlSets(kvstore)
-			response.Status = OK
-		}
+	if _, exists := kvstore[request.Key]; exists {
+		response.Status = FAIL
+		return
 	}
+
+	keyValue := KeyValue{
+		Val:       request.Val,
+		Owner:     session.UserID,
+		Readers:   make(map[string]bool),
+		Writers:   make(map[string]bool),
+		Copyfroms: make(map[string]bool),
+		Copytos:   make(map[string]bool),
+		Indirects: make(map[string]bool),
+	}
+
+	// Initialize from request
+	for _, u := range request.Readers {
+		keyValue.Readers[u] = true
+	}
+	for _, u := range request.Writers {
+		keyValue.Writers[u] = true
+	}
+	for _, u := range request.Copyfroms {
+		keyValue.Copyfroms[u] = true
+	}
+	for _, u := range request.Copytos {
+		keyValue.Copytos[u] = true
+	}
+	for _, k := range request.Indirects {
+		keyValue.Indirects[k] = true
+	}
+
+	// Owner can always write
+	keyValue.Writers[session.UserID] = true
+
+	kvstore[request.Key] = keyValue
+	response.Status = OK
 }
 
 // Input: key k. Returns a response. Deletes key from
@@ -504,7 +520,6 @@ func doDelete(request *Request, response *Response) {
 		delete(kvstore, request.Key)
 		response.Status = OK
 	}
-	access_utils.SaveAccessControlSets(kvstore)
 }
 
 // Input: key k. Returns a response with the value
@@ -544,29 +559,44 @@ func doWriteVal(request *Request, response *Response) {
 		updatedKeyValue.Val = request.Val
 
 		kvstore[request.Key] = updatedKeyValue
-		access_utils.SaveAccessControlSets(kvstore)
 		response.Status = OK
 	}
 }
 
 // Copy function - copies the value from src_key to dst_key
 // Both keys must exist for the operation to succeed
+// TODO: to perform this we need to check
+// 1. person copying is present in k.copyfroms of src key
+// 2. person copying is present in k.copytos of dst key
+// check access_utils.isInCopyToSet(session.Uid) && access_utils.isInCopyFromSet(session.Uid)
+
 func doCopy(request *Request, response *Response) {
-
-	// TODO: to perform this we need to check
-	// 1. person copying is present in k.copyfroms of src key
-	// 2. person copying is present in k.copytos of dst key
-	// check access_utils.isInCopyToSet(session.Uid) && access_utils.isInCopyFromSet(session.Uid)
-
-	// First check if source key exists
-	if srcVal, srcOk := kvstore[request.Src_key]; srcOk {
-		// Then check if destination key exists
-		if _, dstOk := kvstore[request.Dst_key]; dstOk {
-			// Copy the value
-			kvstore[request.Dst_key] = srcVal
-			response.Status = OK
-		}
+	if _, srcOk := kvstore[request.Src_key]; !srcOk {
+		response.Status = FAIL
+		return
 	}
+	if _, dstOk := kvstore[request.Dst_key]; !dstOk {
+		response.Status = FAIL
+		return
+	}
+
+	if !access_utils.IsInCopyFromSet(request.Src_key, session.UserID, kvstore) ||
+		!access_utils.IsInCopyToSet(request.Dst_key, session.UserID, kvstore) {
+		response.Status = FAIL
+		return
+	}
+
+	// Copy only the value, not the access control sets
+	kvstore[request.Dst_key] = KeyValue{
+		Val:       kvstore[request.Src_key].Val,
+		Owner:     kvstore[request.Dst_key].Owner,
+		Readers:   kvstore[request.Dst_key].Readers,
+		Writers:   kvstore[request.Dst_key].Writers,
+		Copyfroms: kvstore[request.Dst_key].Copyfroms,
+		Copytos:   kvstore[request.Dst_key].Copytos,
+		Indirects: kvstore[request.Dst_key].Indirects,
+	}
+	response.Status = OK
 }
 
 // When the session is active allow logout
@@ -651,15 +681,45 @@ func doChangePass(request *Request, response *Response) {
 // if particular set is not passed dont do anything with that
 // if [] is passed for some operation reset that particular op set to empty
 func doModAcl(request *Request, response *Response) {
-	// Check if the user is the owner of the key
-	if kvstore[request.Key].Owner != session.UserID {
+	keyValue, exists := kvstore[request.Key]
+	if !exists || keyValue.Owner != session.UserID {
 		response.Status = FAIL
 		return
 	}
 
-	// Save the access control sets
-	access_utils.SaveAccessControlSets(kvstore)
+	// nil → no change, [] → reset to empty
+	if request.Readers != nil {
+		keyValue.Readers = make(map[string]bool)
+		for _, u := range request.Readers {
+			keyValue.Readers[u] = true
+		}
+	}
+	if request.Writers != nil {
+		keyValue.Writers = make(map[string]bool)
+		for _, u := range request.Writers {
+			keyValue.Writers[u] = true
+		}
+	}
+	if request.Copyfroms != nil {
+		keyValue.Copyfroms = make(map[string]bool)
+		for _, u := range request.Copyfroms {
+			keyValue.Copyfroms[u] = true
+		}
+	}
+	if request.Copytos != nil {
+		keyValue.Copytos = make(map[string]bool)
+		for _, u := range request.Copytos {
+			keyValue.Copytos[u] = true
+		}
+	}
+	if request.Indirects != nil {
+		keyValue.Indirects = make(map[string]bool)
+		for _, k := range request.Indirects {
+			keyValue.Indirects[k] = true
+		}
+	}
 
+	kvstore[request.Key] = keyValue
 	response.Status = OK
 }
 
@@ -667,53 +727,31 @@ func doModAcl(request *Request, response *Response) {
 // Helps owner review all the permissions of kv store
 // Returns unions of the direct access control sets and indirect sets
 func doRevAcl(request *Request, response *Response) {
-
-	// Check if the user is the owner of the key
-	if kvstore[request.Key].Owner != session.UserID {
+	keyValue, exists := kvstore[request.Key]
+	if !exists || keyValue.Owner != session.UserID {
 		response.Status = FAIL
 		return
 	}
 
-	// Get the direct access control sets
-	readers := kvstore[request.Key].Readers
-	writers := kvstore[request.Key].Writers
-	copytos := kvstore[request.Key].Copytos
-	copyfroms := kvstore[request.Key].Copyfroms
+	// Direct sets
+	response.Readers = mapKeysToSlice(keyValue.Readers)
+	response.Writers = mapKeysToSlice(keyValue.Writers)
+	response.Copytos = mapKeysToSlice(keyValue.Copytos)
+	response.Copyfroms = mapKeysToSlice(keyValue.Copyfroms)
+	response.Indirects = mapKeysToSlice(keyValue.Indirects)
 
-	// Get the indirect access control sets
-	indirectReaders := make(map[string]bool)
-	indirectWriters := make(map[string]bool)
-	indirectCopytos := make(map[string]bool)
-	indirectCopyfroms := make(map[string]bool)
+	// Effective sets (with indirects)
+	effectiveReaders := access_utils.GetEffectiveReaderSet(request.Key, kvstore)
+	effectiveWriters := access_utils.GetEffectiveWriterSet(request.Key, kvstore)
+	effectiveCopyfroms := access_utils.GetEffectiveCopyFromSet(request.Key, kvstore)
+	effectiveCopytos := access_utils.GetEffectiveCopyToSet(request.Key, kvstore)
 
-	// Iterate over the indirect sets
-	for indirectKey := range kvstore[request.Key].Indirects {
-		// Get the indirect access control sets for the current indirect key
-		indirectReaders = unionMaps(indirectReaders, kvstore[indirectKey].Readers)
-		indirectWriters = unionMaps(indirectWriters, kvstore[indirectKey].Writers)
-		indirectCopytos = unionMaps(indirectCopytos, kvstore[indirectKey].Copytos)
-		indirectCopyfroms = unionMaps(indirectCopyfroms, kvstore[indirectKey].Copyfroms)
-	}
-
-	// Return the unions of the direct and indirect access control sets
-	response.Readers = mapKeysToSlice(unionMaps(readers, indirectReaders))
-	response.Writers = mapKeysToSlice(unionMaps(writers, indirectWriters))
-	response.Copytos = mapKeysToSlice(unionMaps(copytos, indirectCopytos))
-	response.Copyfroms = mapKeysToSlice(unionMaps(copyfroms, indirectCopyfroms))
+	response.R_k = mapKeysToSlice(effectiveReaders)
+	response.W_k = mapKeysToSlice(effectiveWriters)
+	response.C_Src_k = mapKeysToSlice(effectiveCopyfroms)
+	response.C_Dst_k = mapKeysToSlice(effectiveCopytos)
 
 	response.Status = OK
-}
-
-// unionMaps returns the union of two maps.
-func unionMaps(m1, m2 map[string]bool) map[string]bool {
-	result := make(map[string]bool)
-	for k := range m1 {
-		result[k] = true
-	}
-	for k := range m2 {
-		result[k] = true
-	}
-	return result
 }
 
 func mapKeysToSlice(m map[string]bool) []string {

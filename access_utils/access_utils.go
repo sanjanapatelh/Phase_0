@@ -1,7 +1,6 @@
 package access_utils
 
 import (
-	"encoding/json"
 	. "types"
 )
 
@@ -57,7 +56,7 @@ func IsInWriterSet(key string, uid string, kvstore map[string]KeyValue) bool {
 	return false
 }
 
-func isInCopyToSet(key string, uid string, kvstore map[string]KeyValue) bool {
+func IsInCopyToSet(key string, uid string, kvstore map[string]KeyValue) bool {
 	// Get the key-value pair from the store
 	keyValue, ok := kvstore[key]
 	if !ok {
@@ -73,7 +72,7 @@ func isInCopyToSet(key string, uid string, kvstore map[string]KeyValue) bool {
 	// Check if the user is in any of the indirect sets
 	for indirect := range keyValue.Indirects {
 		if _, ok := kvstore[indirect]; ok {
-			if isInCopyToSet(indirect, uid, kvstore) {
+			if IsInCopyToSet(indirect, uid, kvstore) {
 				return true
 			}
 		}
@@ -109,69 +108,98 @@ func IsInCopyFromSet(key string, uid string, kvstore map[string]KeyValue) bool {
 	return false
 }
 
-// SaveAccessControlSets saves the access control sets to the underlying storage.
-func SaveAccessControlSets(kvstore map[string]KeyValue) error {
-	// Iterate over the key-value pairs in the store
-	for key, keyValue := range kvstore {
-		// Save the readers set
-		if err := SaveSet(key, keyValue.Readers, "readers"); err != nil {
-			return err
+// GetEffectiveReaderSet returns the effective set of readers for the given key.
+// It is the union of the readers set and the readers sets of all the indirect sets.
+func GetEffectiveReaderSet(key string, kvstore map[string]KeyValue) map[string]bool {
+	result := make(map[string]bool)
+
+	// If key exists, add its readers set to the result
+	if v, ok := kvstore[key]; ok {
+		for u := range v.Readers {
+			result[u] = true
 		}
 
-		// Save the writers set
-		if err := SaveSet(key, keyValue.Writers, "writers"); err != nil {
-			return err
-		}
-
-		// Save the copyto set
-		if err := SaveSet(key, keyValue.Copytos, "copyto"); err != nil {
-			return err
-		}
-
-		// Save the copyfrom set
-		if err := SaveSet(key, keyValue.Copyfroms, "copyfrom"); err != nil {
-			return err
-		}
-
-		// Save the indirect sets
-		if err := SaveIndirectSets(key, keyValue.Indirects); err != nil {
-			return err
+		// Add the readers sets of all the indirect sets to the result
+		for indirect := range v.Indirects {
+			if _, ok := kvstore[indirect]; ok {
+				for u := range GetEffectiveReaderSet(indirect, kvstore) {
+					result[u] = true
+				}
+			}
 		}
 	}
 
-	return nil
+	return result
 }
 
-// saveSet saves a single access control set to the underlying storage.
-func SaveSet(key string, set map[string]bool, setName string) error {
-	// Convert the set to a JSON-encoded string
-	setJSON, err := json.Marshal(set)
-	if err != nil {
-		return err
+// GetEffectiveWriterSet returns the effective set of writers for the given key.
+// It is the union of the writers set and the writers sets of all the indirect sets.
+func GetEffectiveWriterSet(key string, kvstore map[string]KeyValue) map[string]bool {
+	// Initialize the result to an empty set
+	result := make(map[string]bool)
+
+	// If the key exists, add its writers set to the result
+	if v, ok := kvstore[key]; ok {
+		for u := range v.Writers {
+			result[u] = true
+		}
+
+		// Add the writers sets of all the indirect sets to the result
+		for indirect := range v.Indirects {
+			if _, ok := kvstore[indirect]; ok {
+				for u := range GetEffectiveWriterSet(indirect, kvstore) {
+					result[u] = true
+				}
+			}
+		}
 	}
 
-	// Save the set to the underlying storage
-	// Replace this with your actual storage mechanism
-	// For now, just print the set to the console
-	println("Saving set:", setName, "for key:", key)
-	println(string(setJSON))
-
-	return nil
+	// Return the complete set of effective writers
+	return result
 }
 
-// saveIndirectSets saves the indirect sets to the underlying storage.
-func SaveIndirectSets(key string, indirects map[string]bool) error {
-	// Convert the indirect sets to a JSON-encoded string
-	indirectsJSON, err := json.Marshal(indirects)
-	if err != nil {
-		return err
+// GetEffectiveCopyFromSet returns the effective copy-from set for the given key.
+// It's the union of the copyfrom set and the copyfrom sets of all the indirect sets.
+func GetEffectiveCopyFromSet(key string, kvstore map[string]KeyValue) map[string]bool {
+	result := make(map[string]bool)
+	if v, ok := kvstore[key]; ok {
+		// Add the copyfrom set of the key to the result
+		for u := range v.Copyfroms {
+			result[u] = true
+		}
+		// Add the copyfrom sets of all the indirect sets to the result
+		for indirect := range v.Indirects {
+			if _, ok := kvstore[indirect]; ok {
+				for u := range GetEffectiveCopyFromSet(indirect, kvstore) {
+					result[u] = true
+				}
+			}
+		}
+	}
+	return result
+}
+
+// GetEffectiveCopyToSet returns the effective copy-to set for the given key.
+// It's the union of the copyto set and the copyto sets of all the indirect sets.
+func GetEffectiveCopyToSet(key string, kvstore map[string]KeyValue) map[string]bool {
+	// Initialize the result to an empty set
+	result := make(map[string]bool)
+
+	// If the key exists, add its copyto set to the result
+	if v, ok := kvstore[key]; ok {
+		for u := range v.Copytos {
+			result[u] = true
+		}
+
+		// Add the copyto sets of all the indirect sets to the result
+		for indirect := range v.Indirects {
+			if _, ok := kvstore[indirect]; ok {
+				for u := range GetEffectiveCopyToSet(indirect, kvstore) {
+					result[u] = true
+				}
+			}
+		}
 	}
 
-	// Save the indirect sets to the underlying storage
-	// Replace this with your actual storage mechanism
-	// For now, just print the indirect sets to the console
-	println("Saving indirect sets for key:", key)
-	println(string(indirectsJSON))
-
-	return nil
+	return result
 }
