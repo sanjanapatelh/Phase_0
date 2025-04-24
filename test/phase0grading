@@ -1,55 +1,61 @@
-{"key":"","val":null,"op":"LOGOUT","src_key":"","dst_key":"","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"kc","val":3,"op":"CREATE","src_key":"","dst_key":"","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"","val":null,"op":"LOGIN","src_key":"","dst_key":"","uid":"gs","pass":"abc","old_pass":"","new_pass":""}
-{"key":"","val":null,"op":"REGISTER","src_key":"","dst_key":"","uid":"gs","pass":"abc","old_pass":"","new_pass":""}
-{"key":"","val":null,"op":"LOGIN","src_key":"","dst_key":"","uid":"gs","pass":"abc","old_pass":"","new_pass":""}
-{"key":"","val":null,"op":"LOGIN","src_key":"","dst_key":"","uid":"fbs","pass":"def","old_pass":"","new_pass":""}
-{"key":"","val":null,"op":"LOGOUT","src_key":"","dst_key":"","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"","val":null,"op":"COPY","src_key":"kc","dst_key":"ke","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"","val":null,"op":"LOGIN","src_key":"","dst_key":"","uid":"gs","pass":"abc","old_pass":"","new_pass":""}
-{"key":"","val":null,"op":"COPY","src_key":"kc","dst_key":"ke","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"kc","val":3,"op":"CREATE","src_key":"","dst_key":"","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"kc","val":null,"op":"READ","src_key":"","dst_key":"","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"kc","val":6,"op":"CREATE","src_key":"","dst_key":"","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"kc","val":null,"op":"READ","src_key":"","dst_key":"","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"kd","val":null,"op":"READ","src_key":"","dst_key":"","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"ke","val":null,"op":"READ","src_key":"","dst_key":"","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"","val":null,"op":"COPY","src_key":"kc","dst_key":"ke","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"ke","val":null,"op":"READ","src_key":"","dst_key":"","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"ke","val":2,"op":"WRITE","src_key":"","dst_key":"","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"ke","val":null,"op":"READ","src_key":"","dst_key":"","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"kc","val":2,"op":"WRITE","src_key":"","dst_key":"","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"kf","val":null,"op":"READ","src_key":"","dst_key":"","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"kc","val":null,"op":"READ","src_key":"","dst_key":"","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"ke","val":5,"op":"CREATE","src_key":"","dst_key":"","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"ke","val":null,"op":"READ","src_key":"","dst_key":"","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"kc","val":null,"op":"READ","src_key":"","dst_key":"","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"","val":null,"op":"COPY","src_key":"kc","dst_key":"ke","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"ke","val":null,"op":"READ","src_key":"","dst_key":"","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"kc","val":null,"op":"READ","src_key":"","dst_key":"","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"kC","val":null,"op":"DELETE","src_key":"","dst_key":"","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"kc","val":null,"op":"READ","src_key":"","dst_key":"","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"kc","val":null,"op":"DELETE","src_key":"","dst_key":"","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"kc","val":null,"op":"READ","src_key":"","dst_key":"","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"","val":null,"op":"CHANGE_PASS","src_key":"","dst_key":"","uid":"gs","pass":"","old_pass":"bcd","new_pass":"efg"}
-{"key":"","val":null,"op":"CHANGE_PASS","src_key":"","dst_key":"","uid":"fbs","pass":"","old_pass":"abcd","new_pass":"def"}
-{"key":"","val":null,"op":"CHANGE_PASS","src_key":"","dst_key":"","uid":"gs","pass":"","old_pass":"abc","new_pass":"efg"}
-{"key":"kc","val":2,"op":"CREATE","src_key":"","dst_key":"","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"kC","val":4,"op":"CREATE","src_key":"","dst_key":"","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"kc","val":null,"op":"READ","src_key":"","dst_key":"","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"kc","val":null,"op":"READ","src_key":"","dst_key":"","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"kC","val":null,"op":"READ","src_key":"","dst_key":"","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"","val":null,"op":"REGISTER","src_key":"","dst_key":"","uid":"fbs","pass":"def","old_pass":"","new_pass":""}
-{"key":"","val":null,"op":"LOGIN","src_key":"","dst_key":"","uid":"fbs","pass":"def","old_pass":"","new_pass":""}
-{"key":"","val":null,"op":"LOGOUT","src_key":"","dst_key":"","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"","val":null,"op":"LOGIN","src_key":"","dst_key":"","uid":"fbs","pass":"def","old_pass":"","new_pass":""}
-{"key":"","val":null,"op":"REGISTER","src_key":"","dst_key":"","uid":"fbs","pass":"def","old_pass":"","new_pass":""}
-{"key":"","val":null,"op":"LOGIN","src_key":"","dst_key":"","uid":"fbs","pass":"def","old_pass":"","new_pass":""}
-{"key":"","val":null,"op":"COPY","src_key":"kc","dst_key":"kC","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"kc","val":null,"op":"READ","src_key":"","dst_key":"","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"kC","val":null,"op":"READ","src_key":"","dst_key":"","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"","val":null,"op":"LOGOUT","src_key":"","dst_key":"","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"kc","val":null,"op":"READ","src_key":"","dst_key":"","uid":"","pass":"","old_pass":"","new_pass":""}
-{"key":"","val":null,"op":"LOGIN","src_key":"","dst_key":"","uid":"gs","pass":"abc","old_pass":"","new_pass":""}
-{"key":"","val":null,"op":"LOGIN","src_key":"","dst_key":"","uid":"gs","pass":"efg","old_pass":"","new_pass":""}
-{"key":"","val":null,"op":"LOGOUT","src_key":"","dst_key":"","uid":"","pass":"","old_pass":"","new_pass":""}
+{"key": "", "val": null, "op": "LOGOUT", "src_key": "", "dst_key": "", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "kc", "val": 3, "op": "CREATE", "src_key": "", "dst_key": "", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "", "val": null, "op": "LOGIN", "src_key": "", "dst_key": "", "uid": "gs", "pass": "abc", "old_pass": "", "new_pass": ""}
+{"key": "", "val": null, "op": "REGISTER", "src_key": "", "dst_key": "", "uid": "gs", "pass": "abc", "old_pass": "", "new_pass": ""}
+{"key": "", "val": null, "op": "LOGIN", "src_key": "", "dst_key": "", "uid": "gs", "pass": "abc", "old_pass": "", "new_pass": ""}
+{"key": "", "val": null, "op": "LOGIN", "src_key": "", "dst_key": "", "uid": "fbs", "pass": "def", "old_pass": "", "new_pass": ""}
+{"key": "", "val": null, "op": "LOGOUT", "src_key": "", "dst_key": "", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "", "val": null, "op": "COPY", "src_key": "kc", "dst_key": "ke", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "", "val": null, "op": "LOGIN", "src_key": "", "dst_key": "", "uid": "gs", "pass": "abc", "old_pass": "", "new_pass": ""}
+{"key": "", "val": null, "op": "COPY", "src_key": "kc", "dst_key": "ke", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "kc", "val": 3, "op": "CREATE", "src_key": "", "dst_key": "", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "kc", "val": null, "op": "READ", "src_key": "", "dst_key": "", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "kc", "val": 6, "op": "CREATE", "src_key": "", "dst_key": "", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "kc", "val": null, "op": "READ", "src_key": "", "dst_key": "", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "kd", "val": null, "op": "READ", "src_key": "", "dst_key": "", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "ke", "val": null, "op": "READ", "src_key": "", "dst_key": "", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "", "val": null, "op": "COPY", "src_key": "kc", "dst_key": "ke", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "ke", "val": null, "op": "READ", "src_key": "", "dst_key": "", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "ke", "val": 2, "op": "WRITE", "src_key": "", "dst_key": "", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "ke", "val": null, "op": "READ", "src_key": "", "dst_key": "", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "kc", "val": 2, "op": "WRITE", "src_key": "", "dst_key": "", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "kf", "val": null, "op": "READ", "src_key": "", "dst_key": "", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "kc", "val": null, "op": "READ", "src_key": "", "dst_key": "", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "ke", "val": 5, "op": "CREATE", "src_key": "", "dst_key": "", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "ke", "val": null, "op": "READ", "src_key": "", "dst_key": "", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "kc", "val": null, "op": "READ", "src_key": "", "dst_key": "", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "", "val": null, "op": "COPY", "src_key": "kc", "dst_key": "ke", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "ke", "val": null, "op": "READ", "src_key": "", "dst_key": "", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "kc", "val": null, "op": "READ", "src_key": "", "dst_key": "", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "kC", "val": null, "op": "DELETE", "src_key": "", "dst_key": "", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "kc", "val": null, "op": "READ", "src_key": "", "dst_key": "", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "kc", "val": null, "op": "DELETE", "src_key": "", "dst_key": "", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "kc", "val": null, "op": "READ", "src_key": "", "dst_key": "", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "", "val": null, "op": "CHANGE_PASS", "src_key": "", "dst_key": "", "uid": "gs", "pass": "", "old_pass": "bcd", "new_pass": "efg"}
+{"key": "", "val": null, "op": "CHANGE_PASS", "src_key": "", "dst_key": "", "uid": "fbs", "pass": "", "old_pass": "abcd", "new_pass": "def"}
+{"key": "", "val": null, "op": "CHANGE_PASS", "src_key": "", "dst_key": "", "uid": "gs", "pass": "", "old_pass": "abc", "new_pass": "efg"}
+{"key": "kc", "val": 2, "op": "CREATE", "src_key": "", "dst_key": "", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "kC", "val": 4, "op": "CREATE", "src_key": "", "dst_key": "", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "kc", "val": null, "op": "READ", "src_key": "", "dst_key": "", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "kc", "val": null, "op": "READ", "src_key": "", "dst_key": "", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "kC", "val": null, "op": "READ", "src_key": "", "dst_key": "", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "", "val": null, "op": "REGISTER", "src_key": "", "dst_key": "", "uid": "fbs", "pass": "def", "old_pass": "", "new_pass": ""}
+{"key": "", "val": null, "op": "LOGIN", "src_key": "", "dst_key": "", "uid": "fbs", "pass": "def", "old_pass": "", "new_pass": ""}
+{"key": "", "val": null, "op": "LOGOUT", "src_key": "", "dst_key": "", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "", "val": null, "op": "LOGIN", "src_key": "", "dst_key": "", "uid": "fbs", "pass": "def", "old_pass": "", "new_pass": ""}
+{"key": "", "val": null, "op": "REGISTER", "src_key": "", "dst_key": "", "uid": "fbs", "pass": "def", "old_pass": "", "new_pass": ""}
+{"key": "", "val": null, "op": "LOGIN", "src_key": "", "dst_key": "", "uid": "fbs", "pass": "def", "old_pass": "", "new_pass": ""}
+{"key": "", "val": null, "op": "COPY", "src_key": "kc", "dst_key": "kC", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "kc", "val": null, "op": "READ", "src_key": "", "dst_key": "", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "kC", "val": null, "op": "READ", "src_key": "", "dst_key": "", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "", "val": null, "op": "LOGOUT", "src_key": "", "dst_key": "", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "kc", "val": null, "op": "READ", "src_key": "", "dst_key": "", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"key": "", "val": null, "op": "LOGIN", "src_key": "", "dst_key": "", "uid": "gs", "pass": "abc", "old_pass": "", "new_pass": ""}
+{"key": "", "val": null, "op": "LOGIN", "src_key": "", "dst_key": "", "uid": "gs", "pass": "efg", "old_pass": "", "new_pass": ""}
+{"key": "", "val": null, "op": "LOGOUT", "src_key": "", "dst_key": "", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
+{"op": "CREATE", "key": "k1", "val": "secret_data", "uid": "alice", "pass": "pw1", "writers": ["alice"], "readers": ["bob"], "copyfroms": ["carol"], "copytos": ["dave"], "indirects": []}
+{"op": "LOGIN", "uid": "alice", "pass": "pw1"}
+{"op": "MODACL", "key": "k1", "uid": "alice", "pass": "pw1", "writers": ["bob", "carol"], "readers": [], "copyfroms": null, "copytos": null, "indirects": null}
+{"op": "REVACL", "key": "k1", "uid": "alice", "pass": "pw1"}
+{"op": "COPY", "src_key": "k1", "dst_key": "k2", "uid": "bob", "pass": "pw2"}
+{"op": "DELETE", "key": "k1", "uid": "alice", "pass": "pw1"}
