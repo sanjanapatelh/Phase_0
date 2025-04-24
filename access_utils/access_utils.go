@@ -4,202 +4,122 @@ import (
 	. "types"
 )
 
-func IsInReaderSet(key string, uid string, kvstore map[string]KeyValue) bool {
+// getFieldMap is a helper function that returns the appropriate field map based on the field name
+func getFieldMap(keyValue KeyValue, fieldName string) map[string]bool {
+	switch fieldName {
+	case "Readers":
+		return keyValue.Readers
+	case "Writers":
+		return keyValue.Writers
+	case "Copytos":
+		return keyValue.Copytos
+	case "Copyfroms":
+		return keyValue.Copyfroms
+	default:
+		return nil
+	}
+}
+
+// IsInSet is a generic function that checks if a user is in a specific set
+// It handles circular dependencies by tracking visited keys
+func IsInSet(key string, uid string, kvstore map[string]KeyValue, fieldName string, visited map[string]bool) bool {
+	// Check for circular dependencies
+	if visited == nil {
+		visited = make(map[string]bool)
+	}
+	if visited[key] {
+		return false // Break circular dependency
+	}
+	visited[key] = true
+
 	// Get the key-value pair from the store
 	keyValue, ok := kvstore[key]
 	if !ok {
-		// Key does not exist, return false
 		return false
 	}
 
-	// Check if the user is in the readers set
-	if _, ok := keyValue.Readers[uid]; ok {
+	// Check if the user is in the specified set
+	fieldMap := getFieldMap(keyValue, fieldName)
+	if _, ok := fieldMap[uid]; ok {
 		return true
 	}
 
 	// Check if the user is in any of the indirect sets
 	for indirect := range keyValue.Indirects {
 		if _, ok := kvstore[indirect]; ok {
-			if IsInReaderSet(indirect, uid, kvstore) {
+			if IsInSet(indirect, uid, kvstore, fieldName, visited) {
 				return true
 			}
 		}
 	}
 
-	// User is not in the readers set or any indirect sets
 	return false
+}
+
+// Public wrapper functions that initialize the visited map
+func IsInReaderSet(key string, uid string, kvstore map[string]KeyValue) bool {
+	return IsInSet(key, uid, kvstore, "Readers", nil)
 }
 
 func IsInWriterSet(key string, uid string, kvstore map[string]KeyValue) bool {
-	// Get the key-value pair from the store
-	keyValue, ok := kvstore[key]
-	if !ok {
-		// Key does not exist, return false
-		return false
-	}
-
-	// Check if the user is in the writers set
-	if _, ok := keyValue.Writers[uid]; ok {
-		return true
-	}
-
-	// Check if the user is in any of the indirect sets
-	for indirect := range keyValue.Indirects {
-		if _, ok := kvstore[indirect]; ok {
-			if IsInWriterSet(indirect, uid, kvstore) {
-				return true
-			}
-		}
-	}
-
-	// User is not in the writers set or any indirect sets
-	return false
+	return IsInSet(key, uid, kvstore, "Writers", nil)
 }
 
 func IsInCopyToSet(key string, uid string, kvstore map[string]KeyValue) bool {
-	// Get the key-value pair from the store
-	keyValue, ok := kvstore[key]
-	if !ok {
-		// Key does not exist, return false
-		return false
-	}
-
-	// Check if the user is in the copyto set
-	if _, ok := keyValue.Copytos[uid]; ok {
-		return true
-	}
-
-	// Check if the user is in any of the indirect sets
-	for indirect := range keyValue.Indirects {
-		if _, ok := kvstore[indirect]; ok {
-			if IsInCopyToSet(indirect, uid, kvstore) {
-				return true
-			}
-		}
-	}
-
-	// User is not in the copyto set or any indirect sets
-	return false
+	return IsInSet(key, uid, kvstore, "Copytos", nil)
 }
 
 func IsInCopyFromSet(key string, uid string, kvstore map[string]KeyValue) bool {
-	// Get the key-value pair from the store
-	keyValue, ok := kvstore[key]
-	if !ok {
-		// Key does not exist, return false
-		return false
-	}
+	return IsInSet(key, uid, kvstore, "Copyfroms", nil)
+}
 
-	// Check if the user is in the copyfrom set
-	if _, ok := keyValue.Copyfroms[uid]; ok {
-		return true
+// GetEffectiveSet is a generic function that returns the effective set for a given field
+// It also handles circular dependencies by tracking visited keys
+func GetEffectiveSet(key string, kvstore map[string]KeyValue, fieldName string, visited map[string]bool) map[string]bool {
+	result := make(map[string]bool)
+	
+	// Check for circular dependencies
+	if visited == nil {
+		visited = make(map[string]bool)
 	}
+	if visited[key] {
+		return result // Break circular dependency
+	}
+	visited[key] = true
 
-	// Check if the user is in any of the indirect sets
-	for indirect := range keyValue.Indirects {
-		if _, ok := kvstore[indirect]; ok {
-			if IsInCopyFromSet(indirect, uid, kvstore) {
-				return true
+	// If key exists, add its field set to the result
+	if v, ok := kvstore[key]; ok {
+		fieldMap := getFieldMap(v, fieldName)
+		for u := range fieldMap {
+			result[u] = true
+		}
+
+		// Add the field sets of all the indirect sets to the result
+		for indirect := range v.Indirects {
+			if _, ok := kvstore[indirect]; ok {
+				for u := range GetEffectiveSet(indirect, kvstore, fieldName, visited) {
+					result[u] = true
+				}
 			}
 		}
 	}
 
-	// User is not in the copyfrom set or any indirect sets
-	return false
+	return result
 }
 
-// GetEffectiveReaderSet returns the effective set of readers for the given key.
-// It is the union of the readers set and the readers sets of all the indirect sets.
+// Public wrapper functions that initialize the visited map
 func GetEffectiveReaderSet(key string, kvstore map[string]KeyValue) map[string]bool {
-	result := make(map[string]bool)
-
-	// If key exists, add its readers set to the result
-	if v, ok := kvstore[key]; ok {
-		for u := range v.Readers {
-			result[u] = true
-		}
-
-		// Add the readers sets of all the indirect sets to the result
-		for indirect := range v.Indirects {
-			if _, ok := kvstore[indirect]; ok {
-				for u := range GetEffectiveReaderSet(indirect, kvstore) {
-					result[u] = true
-				}
-			}
-		}
-	}
-
-	return result
+	return GetEffectiveSet(key, kvstore, "Readers", nil)
 }
 
-// GetEffectiveWriterSet returns the effective set of writers for the given key.
-// It is the union of the writers set and the writers sets of all the indirect sets.
 func GetEffectiveWriterSet(key string, kvstore map[string]KeyValue) map[string]bool {
-	// Initialize the result to an empty set
-	result := make(map[string]bool)
-
-	// If the key exists, add its writers set to the result
-	if v, ok := kvstore[key]; ok {
-		for u := range v.Writers {
-			result[u] = true
-		}
-
-		// Add the writers sets of all the indirect sets to the result
-		for indirect := range v.Indirects {
-			if _, ok := kvstore[indirect]; ok {
-				for u := range GetEffectiveWriterSet(indirect, kvstore) {
-					result[u] = true
-				}
-			}
-		}
-	}
-
-	// Return the complete set of effective writers
-	return result
+	return GetEffectiveSet(key, kvstore, "Writers", nil)
 }
 
-// GetEffectiveCopyFromSet returns the effective copy-from set for the given key.
-// It's the union of the copyfrom set and the copyfrom sets of all the indirect sets.
 func GetEffectiveCopyFromSet(key string, kvstore map[string]KeyValue) map[string]bool {
-	result := make(map[string]bool)
-	if v, ok := kvstore[key]; ok {
-		// Add the copyfrom set of the key to the result
-		for u := range v.Copyfroms {
-			result[u] = true
-		}
-		// Add the copyfrom sets of all the indirect sets to the result
-		for indirect := range v.Indirects {
-			if _, ok := kvstore[indirect]; ok {
-				for u := range GetEffectiveCopyFromSet(indirect, kvstore) {
-					result[u] = true
-				}
-			}
-		}
-	}
-	return result
+	return GetEffectiveSet(key, kvstore, "Copyfroms", nil)
 }
 
-// GetEffectiveCopyToSet returns the effective copy-to set for the given key.
-// It's the union of the copyto set and the copyto sets of all the indirect sets.
 func GetEffectiveCopyToSet(key string, kvstore map[string]KeyValue) map[string]bool {
-	// Initialize the result to an empty set
-	result := make(map[string]bool)
-
-	// If the key exists, add its copyto set to the result
-	if v, ok := kvstore[key]; ok {
-		for u := range v.Copytos {
-			result[u] = true
-		}
-
-		// Add the copyto sets of all the indirect sets to the result
-		for indirect := range v.Indirects {
-			if _, ok := kvstore[indirect]; ok {
-				for u := range GetEffectiveCopyToSet(indirect, kvstore) {
-					result[u] = true
-				}
-			}
-		}
-	}
-
-	return result
+	return GetEffectiveSet(key, kvstore, "Copytos", nil)
 }
