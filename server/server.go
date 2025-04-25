@@ -533,8 +533,8 @@ func doReadVal(request *Request, response *Response) {
 		response.Status = FAIL
 		return
 	}
-	if v, ok := kvstore[request.Key]; ok {
-		response.Val = v
+	if kv, ok := kvstore[request.Key]; ok {
+		response.Val = kv.Val
 		response.Status = OK
 	}
 }

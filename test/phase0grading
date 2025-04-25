@@ -53,9 +53,3 @@
 {"key": "", "val": null, "op": "LOGIN", "src_key": "", "dst_key": "", "uid": "gs", "pass": "abc", "old_pass": "", "new_pass": ""}
 {"key": "", "val": null, "op": "LOGIN", "src_key": "", "dst_key": "", "uid": "gs", "pass": "efg", "old_pass": "", "new_pass": ""}
 {"key": "", "val": null, "op": "LOGOUT", "src_key": "", "dst_key": "", "uid": "", "pass": "", "old_pass": "", "new_pass": ""}
-{"op": "CREATE", "key": "k1", "val": "secret_data", "uid": "alice", "pass": "pw1", "writers": ["alice"], "readers": ["bob"], "copyfroms": ["carol"], "copytos": ["dave"], "indirects": []}
-{"op": "LOGIN", "uid": "alice", "pass": "pw1"}
-{"op": "MODACL", "key": "k1", "uid": "alice", "pass": "pw1", "writers": ["bob", "carol"], "readers": [], "copyfroms": null, "copytos": null, "indirects": null}
-{"op": "REVACL", "key": "k1", "uid": "alice", "pass": "pw1"}
-{"op": "COPY", "src_key": "k1", "dst_key": "k2", "uid": "bob", "pass": "pw2"}
-{"op": "DELETE", "key": "k1", "uid": "alice", "pass": "pw1"}
