@@ -495,11 +495,12 @@ func doCreate(request *Request, response *Response) {
 		keyValue.Copytos[u] = true
 	}
 	for _, k := range request.Indirects {
+		if _, exists := kvstore[k]; !exists {
+			response.Status = FAIL
+			return
+		}
 		keyValue.Indirects[k] = true
 	}
-
-	// Owner can always write
-	keyValue.Writers[session.UserID] = true
 
 	kvstore[request.Key] = keyValue
 	response.Status = OK

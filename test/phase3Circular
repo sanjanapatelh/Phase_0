@@ -5,7 +5,7 @@
 {"op": "REGISTER", "uid": "fbs", "pass": "pw5"}
 {"op": "REGISTER", "uid": "gs", "pass": "pw6"}
 {"op": "LOGIN", "uid": "alice", "pass": "pw1"}
-{"op": "CREATE", "key": "k1", "val": "top_secret", "readers": ["bob"], "writers": ["alice"], "copyfroms": ["carol"], "copytos": ["dave"], "indirects": ["k2"]}
+{"op": "CREATE", "key": "k1", "val": "top_secret", "readers": ["bob"], "writers": ["alice"], "copyfroms": ["carol"], "copytos": ["dave"], "indirects": []}
 {"op": "READ", "key": "k1"}
 {"op": "WRITE", "key": "k1", "val":"modify"}
 {"op": "COPY", "src_key": "k1", "dst_key": "k2"}
