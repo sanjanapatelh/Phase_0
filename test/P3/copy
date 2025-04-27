@@ -1,0 +1,22 @@
+{"op": "REGISTER", "uid": "alice", "pass": "pw1"}
+{"op": "REGISTER", "uid": "bob", "pass": "pw2"}
+{"op": "REGISTER", "uid": "carol", "pass": "pw3"}
+{"op": "REGISTER", "uid": "davina", "pass": "pw4"}
+
+{"op": "LOGIN", "uid": "alice", "pass": "pw1"}
+{"op": "CREATE", "key": "k1", "val": "top_secret", "uid": "alice" , "copyfroms":[] , "copytos":[] ,"readers":["alice"]}
+{"op": "CREATE", "key": "k2", "val": "bottom_secret", "uid": "alice" , "copyfroms":[] , "copytos":["bob"],"readers":["alice"] }
+{"op": "REVACL", "key": "k1" }
+{"op": "REVACL", "key": "k2" }
+{"op": "LOGOUT", "uid": "alice" }
+
+
+
+{"op": "LOGIN", "uid": "carol", "pass": "pw3"}
+{"op": "COPY", "key": "k2", "src_key":"k1" ,"dst_key":"k2" }
+{"op": "LOGOUT" }
+
+{"op": "LOGIN", "uid": "alice", "pass": "pw1"}
+{"op": "READ", "key": "k1" }
+{"op": "READ", "key": "k2" }
+{"op": "LOGOUT", "uid": "alice" }
