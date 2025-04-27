@@ -1,0 +1,83 @@
+# Discretionary Access Control (DAC) Implementation Design
+
+## Access Control Model
+
+This system implements a DAC model for a key-value store with strict separation of privileges:
+
+### Owner Privileges
+- The owner of a key is the principal who created it
+- Owners have ONLY these special privileges:
+  - MODACL: Ability to modify access control lists
+  - REVACL: Ability to review access control lists
+  - DELETE: Ability to delete the key
+
+### Access Control Lists (ACLs)
+Each key has four explicit access control sets:
+- readers: Principals authorized to read the key's value
+- writers: Principals authorized to write (modify) the key's value
+- copyfroms: Principals authorized to use the key as source in COPY operations
+- copytos: Principals authorized to use the key as destination in COPY operations
+
+### Important Note
+- No implicit permissions exist - even owners must be explicitly added to the appropriate ACLs
+- Owners who fail to add themselves to readers/writers can be locked out of their own keys
+
+## Indirect References
+
+Keys can reference other keys through an indirects list, creating a mechanism for transitive authorization:
+
+- indirects: Set of keys whose authorization sets augment this key's sets
+- When evaluating permissions, the system computes effective authorization sets:
+  - R(k): Effective readers (direct + indirect)
+  - W(k): Effective writers (direct + indirect)
+  - C_src(k): Effective copy sources (direct + indirect)
+  - C_dst(k): Effective copy destinations (direct + indirect)
+
+## Operation Authorization
+
+Each operation requires specific authorization:
+- READ: Principal must be in R(k)
+- WRITE: Principal must be in W(k)
+- COPY: Principal must be in C_src(source_key) AND C_dst(destination_key)
+- DELETE: Principal must be the owner
+- MODACL: Principal must be the owner
+- REVACL: Principal must be the owner
+
+## Implementation Requirements
+
+1. **Cycle Detection**: Prevent circular references in indirect computations
+2. **Existence Validation**: Verify referenced keys exist before adding to indirects
+   ```go
+   for _, k := range request.Indirects {
+       if _, exists := kvstore[k]; !exists {
+           response.Status = FAIL
+           return
+       }
+       keyValue.Indirects[k] = true
+   }
+   ```
+3. **Effective Set Computation**: Properly compute transitive authorizations
+4. **Permission Enforcement**: Check appropriate authorization for each operation
+
+## Performance Optimizations
+
+The implementation prioritizes performance, especially in the critical computation of effective authorization sets:
+
+1. **Maps for O(1) Lookups**: All permission sets use maps (`map[string]bool`) rather than slices for constant-time operations:
+   ```go
+   Writers   map[string]bool
+   Readers   map[string]bool
+   Copyfroms map[string]bool
+   Copytos   map[string]bool
+   Indirects map[string]bool
+   ```
+
+2. **Cycle Prevention**: Using a `visited` map prevents infinite recursion when computing effective sets:
+   ```go
+   if visited[key] {
+       return []string{}
+   }
+   visited[key] = true
+   ```
+
+3. **Early Key Existence Validation**: Checks if keys exist before adding to indirects to fail early and prevent invalid references
