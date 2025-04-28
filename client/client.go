@@ -50,7 +50,7 @@ func ProcessOp(request *Request) *Response {
 			if !session.Active {
 				doLogin(request, response)
 			}
-		case LOGOUT, CREATE, DELETE, READ, WRITE, COPY, CHANGE_PASS:
+		case LOGOUT, CREATE, DELETE, READ, WRITE, COPY, CHANGE_PASS, MODACL, REVACL:
 			if session.Active {
 				doSecureOp(request, response)
 			}
@@ -80,6 +80,8 @@ func validateRequest(r *Request) bool {
 		return r.Uid != "" && r.Pass != ""
 	case CHANGE_PASS:
 		return r.Old_pass != "" && r.New_pass != ""
+	case MODACL, REVACL:
+		return r.Key != ""
 	default:
 		return false
 	}
@@ -361,9 +363,7 @@ func doSecureOp(request *Request, response *Response) {
 	}
 
 	// 6. Copy response data
-	response.Status = decryptedResponse.Status
-	response.Val = decryptedResponse.Val
-	response.Uid = decryptedResponse.Uid
+	*response = *decryptedResponse
 
 	// 7. Handle logout specially - clear session if logout was successful
 	if request.Op == LOGOUT && response.Status == OK {

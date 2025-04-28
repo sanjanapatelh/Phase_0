@@ -1,0 +1,28 @@
+{"op": "REGISTER", "uid": "alice", "pass": "pw1"}
+{"op": "REGISTER", "uid": "bob", "pass": "pw2"}
+{"op": "REGISTER", "uid": "carol", "pass": "pw3"}
+{"op": "REGISTER", "uid": "dave", "pass": "pw4"}
+{"op": "REGISTER", "uid": "fbs", "pass": "pw5"}
+{"op": "REGISTER", "uid": "gs", "pass": "pw6"}
+{"op": "LOGIN", "uid": "alice", "pass": "pw1"}
+{"op": "CREATE", "key": "k1", "val": "top_secret", "readers": ["bob"], "writers": ["alice"], "copyfroms": ["carol"], "copytos": ["dave"], "indirects": []}
+{"op": "READ", "key": "k1"}
+{"op": "WRITE", "key": "k1", "val":"modify"}
+{"op": "COPY", "src_key": "k1", "dst_key": "k2"}
+{"op": "CREATE", "key": "k2", "val": "yo_secret", "readers": ["carol"], "writers": ["bob"], "copyfroms": ["dave"], "copytos": ["alice"], "indirects": ["k3"]}
+{"op": "CREATE", "key": "k3", "val": "f_secret", "readers": ["fbs"], "writers": ["bob"], "copyfroms": ["dave"], "copytos": ["alice"], "indirects": ["k1"]}
+{"op": "REVACL", "key": "k1"}
+{"op":"LOGOUT"}
+{"op": "LOGIN", "uid": "bob", "pass": "pw2"}
+{"op": "READ", "key": "k1"}
+{"op": "WRITE", "key": "k1", "val":"modify"}
+{"op": "COPY", "src_key": "k1", "dst_key": "k2"}
+{"op":"LOGOUT"}
+{"op": "LOGIN", "uid": "dave", "pass": "pw4"}
+{"op": "COPY", "src_key": "k1", "dst_key": "k2"}
+{"op": "COPY", "src_key": "k2", "dst_key": "k1"}
+{"op": "READ", "key": "k1"}
+{"op":"LOGOUT"}
+{"op": "LOGIN", "uid": "bob", "pass": "pw2"}
+{"op": "READ", "key": "k1"}
+{"op":"LOGOUT"}

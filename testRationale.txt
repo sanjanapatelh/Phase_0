@@ -1,83 +1,106 @@
-## User Registration and Authentication
-1. **User Registration**
-   - Successfully registered user "gs" with password "password123"
-   - Successfully registered user "fbs" with password "securepwd456"
-   - Correctly rejected attempt to register "gs" again with a different password
-   - REGISTER response correctly includes the requested UID regardless of success/failure
-   - When registering an existing user (duplicate), the response maintains the requested UID
+# Test Rationale Document
 
-2. **Login Authentication**
-   - Successful login with correct credentials for both users
-   - Failed login with incorrect passwords
-   - Failed login attempts while another user is already logged in (session enforcement)
-   - LOGIN response correctly includes the requested UID when login fails and no session is active
-   - Failed login attempts (wrong password or nonexistent user) maintain the requested UID in response
+## Test Case: copyTest
+Tests the copy operation's permission enforcement mechanism.
 
-3. **Password Management**
-   - Failed password change attempts with incorrect old password
-   - Failed attempts to change another user's password
-   - Login attempts with supposed new passwords that were never actually changed failed correctly
+**Key Verification Points:**
+- Alice creates k1 with herself as reader
+- Alice creates k2 with bob in copytos and herself as reader
+- Carol attempts to copy from k1 to k2 (should fail - no permissions)
+- Alice verifies values remain unchanged
 
-## Session Management
-1. **Session Enforcement**
-   - Operations without active sessions correctly failed
-   - Only one active session was allowed at a time
-   - Login for a second user failed while first user was still logged in
+**Expected Results:**
+- COPY operation should fail (Carol lacks both copyFrom and copyTo permissions)
+- No changes to k1 or k2 values
 
-2. **Logout Behavior**
-   - Successful logout cleared active sessions
-   - Logout without an active session correctly failed
-   - LOGOUT response includes the UID of the previously logged-in user
+## Test Case: indirectTest
+Tests the validation of indirect references and proper access control.
 
-## Key-Value Store Operations
-1. **CREATE Operations**
-   - CREATE failed without login
-   - Successfully created keys when logged in
-   - Failed to create keys that already exist
+**Key Verification Points:**
+- Alice attempts to create k1 with indirect reference to non-existent k2 (should fail)
+- Alice creates k2 with various permissions
+- Alice reattempts to create k1 with now-valid indirect reference to k2 (should succeed)
+- Alice verifies both keys are readable
 
-2. **READ Operations**
-   - READ failed without login
-   - Successfully read existing keys
-   - Failed to read non-existent keys
+**Expected Results:**
+- First CREATE fails (indirect reference to non-existent key)
+- Second CREATE succeeds (valid indirect reference)
+- READ operations succeed for owner with read permissions
 
-3. **WRITE Operations**
-   - Successfully modified existing keys
-   - Failed to write to non-existent keys
+## Test Case: indirectLoop
+Tests detection and prevention of circular indirect references.
 
-4. **DELETE Operations**
-   - Successfully deleted existing keys
-   - Failed to delete non-existent keys
-   - Case-sensitivity was properly enforced in key names
+**Key Verification Points:**
+- Alice creates k1 and k2 without indirects
+- Alice modifies k1 to include indirect reference to k2 (should succeed)
+- Alice attempts to modify k2 to include indirect reference to k1 (should fail - circular)
 
-5. **COPY Operations**
-   - Failed when either source or destination didn't exist
-   - Successfully copied between existing keys
-   - Case-sensitivity was properly enforced
+**Expected Results:**
+- First MODACL succeeds (no cycle)
+- Second MODACL fails (would create k1→k2→k1 cycle)
 
-## Protocol Security Features
-1. **Replay Attack Prevention**
-   - The nonce handling appears to be working correctly as there are no successful replay attacks in the tests
+## Test Case: Owner Not Registered
+Tests system behavior with invalid/unauthorized users.
 
-2. **Authentication Integrity**
-   - Failed authentication attempts didn't compromise existing sessions
-   - Failed operations didn't alter the state unexpectedly
+**Key Verification Points:**
+- Attempts login with non-existent user "alic" (typo)
+- Carol attempts to delete Alice's key (should fail - not owner)
 
-## UID Handling in Responses
-1. **REGISTER Response UID Handling**
-   - Response UID matches request UID for successful user registration
-   - Response UID matches request UID even when registration fails (duplicate user)
+**Expected Results:**
+- LOGIN fails with invalid user
+- DELETE fails (only owners can delete keys)
 
-2. **LOGIN Response UID Handling**
-   - Response UID matches request UID when login fails with nonexistent user
-   - Response UID matches request UID when login fails with incorrect password
-   - Response UID correctly reflects the logged-in user after successful login
+## Test Case: DELETE Operation
 
-3. **UID Consistency Across Operations**
-   - After successful login, all operation responses maintain the logged-in user's UID
-   - After logout, the UID in the logout response correctly reflects the previously logged-in user
+Tests owner-exclusive delete privileges.
 
-## Testing Instructions
-To run the UID handling tests, use the following command:
-```
-./main -f test/p2
-```
+**Key Verification Points:**
+- Alice creates a key k1
+- Bob attempts to delete k1 (should fail - not owner)
+- Alice successfully deletes k1 (should succeed - is owner)
+- Attempt to read deleted key fails
+
+**Expected Results:**
+- DELETE fails for non-owner
+- DELETE succeeds for owner
+- READ fails after successful deletion
+
+## Test Case: MODACL Operation
+
+Tests owner-exclusive ACL modification privileges.
+
+**Key Verification Points:**
+- Alice creates a key k1 with no readers
+- Alice uses MODACL to add herself as reader
+- Bob attempts to use MODACL on k1 (should fail - not owner)
+- Alice reads k1 (should succeed after MODACL)
+
+**Expected Results:**
+- MODACL succeeds for owner
+- MODACL fails for non-owner
+- READ succeeds after permission addition
+
+## Test Case: REVACL Operation
+
+Tests owner-exclusive ACL review privileges.
+
+**Key Verification Points:**
+- Alice creates a key k1 with complex permissions and indirects
+- Bob attempts REVACL on k1 (should fail - not owner)
+- Alice performs REVACL on k1 (should succeed - is owner)
+- REVACL response contains correct direct and effective permission sets
+
+**Expected Results:**
+- REVACL fails for non-owner
+- REVACL succeeds for owner
+- Response includes all direct and computed permission sets
+
+## Implementation Verification
+
+These tests comprehensively verify:
+
+1. **Permission Enforcement:** Operations fail when user lacks required permissions
+2. **Indirect Reference Validation:** System validates key existence before allowing indirect references
+3. **Cycle Detection:** System prevents circular references that could cause infinite loops
+4. **Owner Privileges:** Only owners can perform DELETE, MODACL, and REVACL operations
+5. **No Implicit Permissions:** Even owners must be explicitly added to access control lists

@@ -1,0 +1,23 @@
+{"op": "REGISTER", "uid": "alice", "pass": "pw1"}
+{"op": "REGISTER", "uid": "bob", "pass": "pw2"}
+{"op": "REGISTER", "uid": "carol", "pass": "pw3"}
+
+{"op": "LOGIN", "uid": "alice", "pass": "pw1"}
+{"op": "CREATE", "key": "k1", "val": "top_secret", "uid": "alice" }
+{"op": "LOGOUT", "uid": "alice" }
+{"op": "LOGIN", "uid": "carol", "pass": "pw3"}
+{"op": "DELETE", "key": "k1" }
+{"op": "LOGOUT", "uid": "" }
+
+{"op": "LOGIN", "uid": "alice", "pass": "pw1"}
+{"op": "DELETE", "key": "k1" }
+{"op": "LOGOUT", "uid": "" }
+
+{"op": "LOGIN", "uid": "alice", "pass": "pw1"}
+{"op": "REVACL", "key": "k1" }
+{"op": "LOGOUT", "uid": "" }
+
+{"op": "LOGIN", "uid": "alice", "pass": "pw1"}
+{"op": "CREATE", "key": "k1", "val": "top_secret", "uid": "alice" }
+{"op": "REVACL", "key": "k1" }
+{"op": "LOGOUT", "uid": "alice" }

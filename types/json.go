@@ -8,11 +8,11 @@ import (
 	"strings"
 )
 
-const _OperationName = "NOOPCREATEDELETEREADWRITECOPYLOGINLOGOUTREGISTERCHANGE_PASS"
+const _OperationName = "NOOPCREATEDELETEREADWRITECOPYLOGINLOGOUTREGISTERCHANGE_PASSMODACLREVACL"
 
-var _OperationIndex = [...]uint8{0, 4, 10, 16, 20, 25, 29, 34, 40, 48, 59}
+var _OperationIndex = [...]uint8{0, 4, 10, 16, 20, 25, 29, 34, 40, 48, 59, 65, 71}
 
-const _OperationLowerName = "noopcreatedeletereadwritecopyloginlogoutregisterchange_pass"
+const _OperationLowerName = "noopcreatedeletereadwritecopyloginlogoutregisterchange_passmodaclrevacl"
 
 func (i Operation) String() string {
 	if i < 0 || i >= Operation(len(_OperationIndex)-1) {
@@ -35,9 +35,11 @@ func _OperationNoOp() {
 	_ = x[LOGOUT-(7)]
 	_ = x[REGISTER-(8)]
 	_ = x[CHANGE_PASS-(9)]
+	_ = x[MODACL-(10)]
+	_ = x[REVACL-(11)]
 }
 
-var _OperationValues = []Operation{NOOP, CREATE, DELETE, READ, WRITE, COPY, LOGIN, LOGOUT, REGISTER, CHANGE_PASS}
+var _OperationValues = []Operation{NOOP, CREATE, DELETE, READ, WRITE, COPY, LOGIN, LOGOUT, REGISTER, CHANGE_PASS, MODACL, REVACL}
 
 var _OperationNameToValueMap = map[string]Operation{
 	_OperationName[0:4]:        NOOP,
@@ -60,6 +62,10 @@ var _OperationNameToValueMap = map[string]Operation{
 	_OperationLowerName[40:48]: REGISTER,
 	_OperationName[48:59]:      CHANGE_PASS,
 	_OperationLowerName[48:59]: CHANGE_PASS,
+	_OperationName[59:65]:      MODACL,
+	_OperationLowerName[59:65]: MODACL,
+	_OperationName[65:71]:      REVACL,
+	_OperationLowerName[65:71]: REVACL,
 }
 
 var _OperationNames = []string{
@@ -73,6 +79,8 @@ var _OperationNames = []string{
 	_OperationName[34:40],
 	_OperationName[40:48],
 	_OperationName[48:59],
+	_OperationName[59:65],
+	_OperationName[65:71],
 }
 
 // OperationString retrieves an enum value from the enum constants string name.

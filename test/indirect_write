@@ -1,0 +1,11 @@
+{"op": "REGISTER", "uid": "alice", "pass": "pw1"}
+{"op": "REGISTER", "uid": "bob", "pass": "pw2"}
+{"op": "REGISTER", "uid": "carol", "pass": "pw3"}
+{"op": "REGISTER", "uid": "davina", "pass": "pw4"}
+
+{"op": "LOGIN", "uid": "alice", "pass": "pw1"}
+{"op": "CREATE", "key": "k1", "val": "top_secret", "uid": "alice" ,"readers":["alice"] , "writer":["bob","carol"]  }
+{"op": "CREATE", "key": "k2", "val": "bottom_secret", "uid": "alice" , "writers":["davina"] ,"readers":["davina"] ,"indirects":["k1"]  }
+{"op": "REVACL", "key": "k1" }
+{"op": "REVACL", "key": "k2" }
+{"op": "LOGOUT", "uid": "alice" }

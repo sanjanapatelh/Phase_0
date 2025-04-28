@@ -1,0 +1,31 @@
+{"op": "REGISTER", "uid": "alice", "pass": "pw1"}
+{"op": "REGISTER", "uid": "bob", "pass": "pw2"}
+{"op": "REGISTER", "uid": "carol", "pass": "pw3"}
+
+
+{"op": "LOGIN", "uid": "alice", "pass": "pw1"}
+{"op": "CREATE", "key": "k1", "val": "top_secret", "uid": "alice" , "writers":["bob"] , "readers":["alice"]}
+{"op": "REVACL", "key": "k1" }
+{"op": "LOGOUT", "uid": "alice" }
+
+{"op": "LOGIN", "uid": "bob", "pass": "pw2"}
+{"op": "WRITE", "key": "k1", "val": "changed"}
+{"op": "LOGOUT", "uid": "bob" }
+
+{"op": "LOGIN", "uid": "alice", "pass": "pw1"}
+{"op": "MODACL", "key": "k1" ,"writers":[] }
+{"op": "LOGOUT", "uid": "alice" }
+
+{"op": "LOGIN", "uid": "bob", "pass": "pw2"}
+{"op": "WRITE", "key": "k1", "val": "bob_changed"}
+{"op": "LOGOUT", "uid": "bob" }
+
+{"op": "LOGIN", "uid": "carol", "pass": "pw3"}
+{"op": "WRITE", "key": "k1", "val": "carol_changed"}
+{"op": "LOGOUT", "uid": "bob" }
+
+{"op": "LOGIN", "uid": "alice", "pass": "pw1"}
+{"op": "READ", "key": "k1" }
+{"op": "REVACL", "key": "k1" }
+{"op": "LOGOUT", "uid": "alice" }
+
